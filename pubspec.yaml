@@ -57,6 +57,16 @@ dependencies:
   intl: ^0.20.2
   http: ^1.6.0
   supabase_flutter: ^2.12.4
+  flutter_dotenv: ^6.0.1
+  latlong2: ^0.10.0
+  cached_network_image: ^3.4.1
+  carousel_slider: ^5.1.2
+  google_fonts: ^8.1.0
+  shared_preferences: ^2.5.5
+  flutter_secure_storage: ^10.3.1
+  video_compress: ^3.1.4
+  http_parser: ^4.1.2
+  mime: ^2.0.0
 
 
 dev_dependencies:

@@ -1,4 +1,3 @@
-// lib/screen/custom_map_page.dart
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
@@ -7,13 +6,20 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart' hide Marker;
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
+import 'package:serkapp/model/house_data.dart';
 import 'package:serkapp/model/rental_model.dart';
-import 'package:serkapp/pages/image_helper.dart';
+import 'package:serkapp/pages/register_page.dart';
 import 'package:serkapp/screen/rental_detail_screen.dart';
 import 'package:serkapp/services/api_services.dart';
+import 'package:serkapp/providers/auth_provider.dart';
+import 'package:serkapp/providers/theme_provider.dart';
+import 'package:serkapp/pages/login_page.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-// Vyuo na kuratibu zao
 const List<Map<String, dynamic>> universities = [
   {'name': 'UDOM', 'lat': -6.1730, 'lng': 35.7419, 'radius_km': 1.5},
   {'name': 'UDSM', 'lat': -6.7696, 'lng': 39.2410, 'radius_km': 2.0},
@@ -21,6 +27,7 @@ const List<Map<String, dynamic>> universities = [
   {'name': 'DIT', 'lat': -6.8160, 'lng': 39.2803, 'radius_km': 1.2},
   {'name': 'MUCE', 'lat': -6.9158, 'lng': 39.2736, 'radius_km': 1.8},
   {'name': 'IFM', 'lat': -6.8230, 'lng': 39.2691, 'radius_km': 1.3},
+  {'name': 'CBE', 'lat': -6.1735, 'lng': 35.7425, 'radius_km': 1.2},
 ];
 
 class CustomMapPage extends StatefulWidget {
@@ -40,7 +47,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // Filter options
   double _minPrice = 0;
   double _maxPrice = 1000000;
   String _selectedType = 'Zote';
@@ -56,10 +62,20 @@ class _CustomMapPageState extends State<CustomMapPage> {
     'Biashara',
   ];
 
-  // 🔥 CHANGED: Use RentalSpot instead of HouseData
   List<RentalSpot> _rentalSpots = [];
 
-  // Hesabu ya umbali (Haversine formula)
+  bool get isDarkMode =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+  Color get primaryColor =>
+      isDarkMode ? const Color(0xFF4CAF50) : const Color(0xFF2E7D32);
+  Color get surfaceColor => isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get backgroundColor =>
+      isDarkMode ? const Color(0xFF121212) : Colors.white;
+  Color get textColor => isDarkMode ? Colors.white : Colors.black87;
+  Color get subtextColor => isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
+  Color get searchBarBg => isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get loadingBg => isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+
   double _calculateDistance(
     double lat1,
     double lng1,
@@ -79,7 +95,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
     return earthRadius * c;
   }
 
-  // Check kama nyumba iko karibu na chuo (using RentalSpot)
   bool _isNearUniversity(RentalSpot spot, Map<String, dynamic> university) {
     if (!spot.hasValidLocation()) return false;
     double distance = _calculateDistance(
@@ -91,17 +106,13 @@ class _CustomMapPageState extends State<CustomMapPage> {
     return distance <= university['radius_km'];
   }
 
-  // Filter nyumba kwa chuo (using RentalSpot)
   List<RentalSpot> _filterByUniversity(List<RentalSpot> spots, String uniName) {
     if (uniName == 'Zote') return spots;
-
     final university = universities.firstWhere(
       (u) => u['name'] == uniName,
       orElse: () => {'name': 'Zote', 'lat': 0.0, 'lng': 0.0, 'radius_km': 0.0},
     );
-
     if (university['name'] == 'Zote') return spots;
-
     return spots.where((spot) => _isNearUniversity(spot, university)).toList();
   }
 
@@ -109,8 +120,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
   void initState() {
     super.initState();
     _determinePosition();
-    _loadRentalSpotsFromAPI(); // 🔥 CHANGED: Load from API
-
+    _loadRentalSpotsFromAPI();
     if (widget.selectedUniversity != null) {
       _selectedUniversity = widget.selectedUniversity!;
     }
@@ -122,7 +132,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
         Position position = await Geolocator.getCurrentPosition(
@@ -131,65 +140,68 @@ class _CustomMapPageState extends State<CustomMapPage> {
             distanceFilter: 10,
           ),
         );
-
         if (mounted) {
-          setState(() {
-            _currentPosition = LatLng(position.latitude, position.longitude);
-          });
+          setState(
+            () => _currentPosition = LatLng(
+              position.latitude,
+              position.longitude,
+            ),
+          );
+          final GoogleMapController controller = await _controller.future;
+          controller.animateCamera(CameraUpdate.newLatLng(_currentPosition));
         }
-
-        final GoogleMapController controller = await _controller.future;
-        controller.animateCamera(CameraUpdate.newLatLng(_currentPosition));
       }
     } catch (e) {
       debugPrint("Error getting location: $e");
     }
   }
 
-  // 🔥 NEW: Load RentalSpots from API
+  // ==================== UPDATED: Friendly error handling ====================
   Future<void> _loadRentalSpotsFromAPI() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
-      debugPrint('📍 Loading rental spots from API for map...');
+      debugPrint('📍 Loading houses from backend...');
+      final List<dynamic> housesJson = await ApiService.getAllHouses();
+      debugPrint('✅ Loaded ${housesJson.length} houses');
 
-      // Get all rental spots from API
-      final spots = await ApiService.getAllRentalSpots();
+      final List<RentalSpot> spots = housesJson.map((json) {
+        final houseData = HouseData.fromJson(json as Map<String, dynamic>);
+        return RentalSpot.fromHouseData(houseData);
+      }).toList();
 
-      debugPrint('✅ Loaded ${spots.length} rental spots from API');
-
-      // Filter only spots with valid coordinates
       final spotsWithLocation = spots
           .where((spot) => spot.hasValidLocation())
           .toList();
-
       debugPrint(
         '📍 Spots with valid coordinates: ${spotsWithLocation.length}',
       );
 
-      setState(() {
-        _rentalSpots = spotsWithLocation;
-      });
-
+      setState(() => _rentalSpots = spotsWithLocation);
       await _loadMarkers();
     } catch (e) {
-      debugPrint('❌ Error loading rental spots: $e');
-      setState(() {
-        _isLoading = false;
-      });
-      _showError("Hitilafu katika kupakua nyumba: $e");
+      debugPrint('❌ Error loading houses: $e');
+      setState(() => _isLoading = false);
+
+      String errorMessage;
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Network is unreachable')) {
+        errorMessage =
+            "Hakuna muunganisho wa mtandao. Tafadhali angalia intaneti yako.";
+      } else if (e.toString().contains('timeout')) {
+        errorMessage = "Muunganisho umechukua muda mrefu. Jaribu tena.";
+      } else {
+        errorMessage = "Hitilafu katika kupakua nyumba. Jaribu tena baadaye.";
+      }
+      _showError(errorMessage);
     }
   }
 
-  // 🔥 MODIFIED: Load markers from _rentalSpots
   Future<void> _loadMarkers() async {
     List<RentalSpot> filteredByUni = _filterByUniversity(
       _rentalSpots,
       _selectedUniversity,
     );
-
     final Set<Marker> loadedMarkers = {};
 
     for (var spot in filteredByUni) {
@@ -198,18 +210,14 @@ class _CustomMapPageState extends State<CustomMapPage> {
           spot.rentPrice.toInt(),
           spot.type,
         );
-
         final Marker marker = Marker(
           markerId: MarkerId(spot.id),
           position: LatLng(spot.latitude, spot.longitude),
           icon: BitmapDescriptor.bytes(icon),
-          onTap: () {
-            _showPropertyBottomSheet(spot);
-          },
+          onTap: () => _showPropertyBottomSheet(spot),
           consumeTapEvents: true,
-          anchor: const Offset(0.5, 0.5),
+          anchor: const Offset(0.5, 1.0),
         );
-
         loadedMarkers.add(marker);
       }
     }
@@ -221,20 +229,13 @@ class _CustomMapPageState extends State<CustomMapPage> {
         _isLoading = false;
       });
     }
-
     await _addUniversityMarkers();
   }
 
-  // 🔥 MODIFIED: Apply filters using RentalSpot
   bool _applyFilters(RentalSpot spot) {
     if (!spot.hasValidLocation()) return false;
-
-    if (spot.rentPrice < _minPrice || spot.rentPrice > _maxPrice) {
-      return false;
-    }
-
+    if (spot.rentPrice < _minPrice || spot.rentPrice > _maxPrice) return false;
     if (_selectedType != 'Zote' && spot.type != _selectedType) return false;
-
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       if (!spot.name.toLowerCase().contains(query) &&
@@ -244,58 +245,40 @@ class _CustomMapPageState extends State<CustomMapPage> {
         return false;
       }
     }
-
     return true;
   }
 
-  // Kuongeza alama za vyuo kwenye ramani
   Future<void> _addUniversityMarkers() async {
     final Set<Marker> uniMarkers = {};
-
     for (var uni in universities) {
       final Uint8List icon = await _createUniversityMarkerBitmap(uni['name']);
-
       final Marker marker = Marker(
         markerId: MarkerId('uni_${uni['name']}'),
         position: LatLng(uni['lat'], uni['lng']),
         icon: BitmapDescriptor.bytes(icon),
-        onTap: () {
-          _showUniversityBottomSheet(uni);
-        },
+        onTap: () => _showUniversityBottomSheet(uni),
         anchor: const Offset(0.5, 0.5),
       );
       uniMarkers.add(marker);
     }
-
-    if (mounted) {
-      setState(() {
-        _universityMarkers.clear();
-        _universityMarkers.addAll(uniMarkers);
-      });
-    }
+    if (mounted) setState(() => _universityMarkers.addAll(uniMarkers));
   }
 
-  // Create marker bitmap kwa vyuo
   Future<Uint8List> _createUniversityMarkerBitmap(String uniName) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
-
     const double size = 36;
-
     final Paint paint = Paint()..color = Colors.red;
     canvas.drawCircle(Offset(size / 2, size / 2), size / 2, paint);
-
     final Paint borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawCircle(Offset(size / 2, size / 2), size / 2 - 1, borderPaint);
-
     final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
+      textDirection: ui.TextDirection.ltr,
       textAlign: TextAlign.center,
     );
-
     textPainter.text = TextSpan(
       text: uniName.substring(0, min(3, uniName.length)),
       style: const TextStyle(
@@ -304,13 +287,11 @@ class _CustomMapPageState extends State<CustomMapPage> {
         fontWeight: FontWeight.bold,
       ),
     );
-
     textPainter.layout(minWidth: 0, maxWidth: size);
     textPainter.paint(
       canvas,
       Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2),
     );
-
     final img = await pictureRecorder.endRecording().toImage(
       size.toInt(),
       size.toInt(),
@@ -319,117 +300,173 @@ class _CustomMapPageState extends State<CustomMapPage> {
     return data!.buffer.asUint8List();
   }
 
-  // Bottom sheet kwa vyuo
   void _showUniversityBottomSheet(Map<String, dynamic> university) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                university['name'],
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              university['name'],
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
-              const SizedBox(height: 8),
-              Text("Radius: ${university['radius_km']} km"),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        setState(() {
-                          _selectedUniversity = university['name'];
-                        });
-                        _refreshMarkers();
-                      },
-                      icon: const Icon(Icons.filter_alt),
-                      label: const Text("Onyesha Nyumba Karibu"),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Radius: ${university['radius_km']} km",
+              style: TextStyle(color: subtextColor),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() => _selectedUniversity = university['name']);
+                _refreshMarkers();
+              },
+              icon: const Icon(Icons.filter_alt),
+              label: const Text("Onyesha Nyumba Karibu"),
+              style: FilledButton.styleFrom(backgroundColor: primaryColor),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
+  // All marker creation methods (unchanged from your original)
   Future<Uint8List> _createCustomMarkerBitmap(int price, String type) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
-
     final Color markerColor = _getMarkerColor(type);
-
-    const double width = 80;
-    const double height = 40;
+    const double width = 60;
+    const double height = 28;
 
     final Paint shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-
+      ..color = Colors.black.withAlpha(64)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(1, 1, width, height),
-        const Radius.circular(10),
+        Rect.fromLTWH(0.5, 0.5, width, height),
+        const Radius.circular(6),
       ),
       shadowPaint,
     );
 
-    final Paint paint = Paint()..color = markerColor;
-
+    final Paint bgPaint = Paint()..color = markerColor;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, width, height),
-        const Radius.circular(10),
+        const Radius.circular(6),
       ),
-      paint,
+      bgPaint,
+    );
+
+    final Paint borderPaint = Paint()
+      ..color = markerColor.withAlpha(230)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, width, height),
+        const Radius.circular(6),
+      ),
+      borderPaint,
+    );
+
+    final Paint circlePaint = Paint()..color = Colors.white;
+    canvas.drawCircle(Offset(14, height / 2), 8, circlePaint);
+    final Paint innerPaint = Paint()..color = markerColor;
+    canvas.drawCircle(Offset(14, height / 2), 5.5, innerPaint);
+    final Paint shinePaint = Paint()..color = Colors.white;
+    canvas.drawCircle(Offset(12, height / 2 - 1.5), 1.5, shinePaint);
+
+    final iconPainter = TextPainter(
+      textDirection: ui.TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    iconPainter.text = TextSpan(
+      text: _getPropertyIcon(type),
+      style: const TextStyle(
+        fontSize: 8.0,
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    iconPainter.layout(minWidth: 0, maxWidth: 12);
+    iconPainter.paint(
+      canvas,
+      Offset(14 - iconPainter.width / 2, (height / 2) - iconPainter.height / 2),
     );
 
     final pricePainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
+      textDirection: ui.TextDirection.ltr,
+      textAlign: TextAlign.left,
     );
-
     pricePainter.text = TextSpan(
       text: _abbreviatePrice(price),
       style: const TextStyle(
-        fontSize: 10.0,
+        fontSize: 9.5,
+        color: Colors.white,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+    pricePainter.layout(minWidth: 0, maxWidth: width - 28);
+    pricePainter.paint(canvas, Offset(26, 7));
+
+    String tagText = _getShortTag(type);
+    final Paint tagBgPaint = Paint()..color = Colors.white.withAlpha(64);
+    double tagWidth = 18.0;
+    double tagHeight = 11.0;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(26, 16, tagWidth, tagHeight),
+        const Radius.circular(3),
+      ),
+      tagBgPaint,
+    );
+
+    final tagPainter = TextPainter(
+      textDirection: ui.TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    tagPainter.text = TextSpan(
+      text: tagText,
+      style: const TextStyle(
+        fontSize: 6.5,
         color: Colors.white,
         fontWeight: FontWeight.w700,
       ),
     );
-
-    pricePainter.layout(minWidth: 0, maxWidth: width);
-    pricePainter.paint(canvas, Offset((width - pricePainter.width) / 2, 6));
-
-    final typePainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-
-    typePainter.text = TextSpan(
-      text: _abbreviateType(type),
-      style: const TextStyle(
-        fontSize: 8.0,
-        color: Colors.white,
-        fontWeight: FontWeight.w500,
+    tagPainter.layout(minWidth: 0, maxWidth: tagWidth);
+    tagPainter.paint(
+      canvas,
+      Offset(
+        26 + (tagWidth - tagPainter.width) / 2,
+        16 + (tagHeight - tagPainter.height) / 2,
       ),
     );
 
-    typePainter.layout(minWidth: 0, maxWidth: width);
-    typePainter.paint(canvas, Offset((width - typePainter.width) / 2, 22));
+    final Paint pinPaint = Paint()..color = markerColor;
+    final Path pinPath = Path();
+    double pinX = width / 2;
+    double pinY = height - 1;
+    pinPath.moveTo(pinX - 4, pinY);
+    pinPath.lineTo(pinX, pinY + 6);
+    pinPath.lineTo(pinX + 4, pinY);
+    pinPath.close();
+    canvas.drawPath(pinPath, pinPaint);
+
+    final Paint pinHighlight = Paint()..color = Colors.white.withAlpha(102);
+    canvas.drawCircle(Offset(pinX, pinY + 2), 1, pinHighlight);
 
     final img = await pictureRecorder.endRecording().toImage(
       width.toInt(),
@@ -439,24 +476,52 @@ class _CustomMapPageState extends State<CustomMapPage> {
     return data!.buffer.asUint8List();
   }
 
-  String _abbreviatePrice(int price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(1)}M';
-    } else if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(0)}K';
+  String _getPropertyIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'apartment':
+        return '🏢';
+      case 'nyumba ya kawaida':
+        return '🏠';
+      case 'studio':
+        return '📐';
+      case 'mansion':
+        return '🏛️';
+      case 'hostel':
+        return '🛏️';
+      case 'ghorofa':
+        return '🏗️';
+      case 'biashara':
+        return '🏪';
+      default:
+        return '🏠';
     }
-    return price.toString();
   }
 
-  String _abbreviateType(String type) {
-    if (type.length > 8) {
-      final words = type.split(' ');
-      if (words.length > 1) {
-        return '${words[0].substring(0, 3)}..';
-      }
-      return '${type.substring(0, 6)}..';
+  String _getShortTag(String type) {
+    switch (type.toLowerCase()) {
+      case 'apartment':
+        return 'Pipa';
+      case 'nyumba ya kawaida':
+        return 'Majl';
+      case 'studio':
+        return 'Stu';
+      case 'mansion':
+        return 'Mans';
+      case 'hostel':
+        return 'Host';
+      case 'ghorofa':
+        return 'Ghor';
+      case 'biashara':
+        return 'Bia';
+      default:
+        return 'Nyum';
     }
-    return type;
+  }
+
+  String _abbreviatePrice(int price) {
+    if (price >= 1000000) return '${(price / 1000000).toStringAsFixed(1)}M';
+    if (price >= 1000) return '${(price / 1000).toStringAsFixed(0)}K';
+    return price.toString();
   }
 
   Color _getMarkerColor(String type) {
@@ -480,274 +545,17 @@ class _CustomMapPageState extends State<CustomMapPage> {
     }
   }
 
-  // Filter dialog
   void _showFiltersBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateBottomSheet) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(24),
-                        topRight: Radius.circular(24),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Chagua Vigezo',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF2E7D32),
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _resetFilters();
-                            });
-                            Navigator.pop(context);
-                          },
-                          child: const Text(
-                            'Sawazisha',
-                            style: TextStyle(color: Color(0xFF2E7D32)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Chuo filter
-                          const Text(
-                            'Chagua Chuo Karibu',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: DropdownButton<String>(
-                              value: _selectedUniversity,
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              items:
-                                  [
-                                    'Zote',
-                                    ...universities.map(
-                                      (u) => u['name'] as String,
-                                    ),
-                                  ].map((String value) {
-                                    return DropdownMenuItem<String>(
-                                      value: value,
-                                      child: Text(value),
-                                    );
-                                  }).toList(),
-                              onChanged: (String? newValue) {
-                                setStateBottomSheet(() {
-                                  _selectedUniversity = newValue!;
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Bei range
-                          const Text(
-                            'Aina mbalimbali za Bei',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          RangeSlider(
-                            values: RangeValues(_minPrice, _maxPrice),
-                            min: 0,
-                            max: 2000000,
-                            divisions: 20,
-                            labels: RangeLabels(
-                              'TZS ${_minPrice.toInt()}',
-                              'TZS ${_maxPrice.toInt()}',
-                            ),
-                            onChanged: (RangeValues values) {
-                              setStateBottomSheet(() {
-                                _minPrice = values.start;
-                                _maxPrice = values.end;
-                              });
-                            },
-                            activeColor: const Color(0xFF2E7D32),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('TZS ${_minPrice.toInt()}'),
-                              Text('TZS ${_maxPrice.toInt()}'),
-                            ],
-                          ),
-                          const SizedBox(height: 32),
-
-                          // Aina ya nyumba
-                          const Text(
-                            'Aina ya Nyumba',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _propertyTypes.map((type) {
-                              final isSelected = _selectedType == type;
-                              return ChoiceChip(
-                                label: Text(type),
-                                selected: isSelected,
-                                onSelected: (selected) {
-                                  setStateBottomSheet(() {
-                                    _selectedType = type;
-                                  });
-                                },
-                                selectedColor: const Color(0xFF2E7D32),
-                                labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.black87,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 32),
-
-                          // Taarifa ya idadi ya nyumba
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.green[50],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.info_outline_rounded,
-                                  color: Colors.green[700],
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'Nyumba ${_markers.length} zimepatikana kutoka kwa ${_rentalSpots.length}',
-                                    style: TextStyle(
-                                      color: Colors.green[800],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Button ya kutumia vigezo
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: FilledButton(
-                              onPressed: () {
-                                _refreshMarkers();
-                                Navigator.pop(context);
-                              },
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF2E7D32),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                elevation: 2,
-                              ),
-                              child: const Text(
-                                'Tumia Vigezo',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // 🔥 MODIFIED: Bottom sheet kwa nyumba using RentalSpot with Base64 image support
-  void _showPropertyBottomSheet(RentalSpot spot) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateBottomSheet) => Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(24),
               topRight: Radius.circular(24),
             ),
@@ -755,12 +563,48 @@ class _CustomMapPageState extends State<CustomMapPage> {
           child: Column(
             children: [
               Container(
-                margin: const EdgeInsets.only(top: 8),
-                width: 40,
-                height: 4,
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+                  color: surfaceColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: subtextColor),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Chagua Vigezo',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _resetFilters());
+                        Navigator.pop(context);
+                      },
+                      child: Text(
+                        'Sawazisha',
+                        style: TextStyle(color: primaryColor),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Expanded(
@@ -769,203 +613,171 @@ class _CustomMapPageState extends State<CustomMapPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 🔥 Picha - Now supports Base64 images
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.grey[200],
-                        ),
-                        child: spot.hasImages()
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: ImageHelper.buildImage(
-                                  spot.getFirstImage()!,
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            : Center(
-                                child: Icon(
-                                  Icons.home_rounded,
-                                  size: 60,
-                                  color: Colors.grey[400],
-                                ),
-                              ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Jina la nyumba
                       Text(
-                        spot.name,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                        'Chagua Chuo Karibu',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isDarkMode
+                              ? Colors.grey[800]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButton<String>(
+                          value: _selectedUniversity,
+                          isExpanded: true,
+                          underline: const SizedBox(),
+                          dropdownColor: surfaceColor,
+                          style: TextStyle(color: textColor),
+                          items:
+                              [
+                                    'Zote',
+                                    ...universities.map(
+                                      (u) => u['name'] as String,
+                                    ),
+                                  ]
+                                  .map(
+                                    (String value) => DropdownMenuItem(
+                                      value: value,
+                                      child: Text(value),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (newValue) => setStateBottomSheet(
+                            () => _selectedUniversity = newValue!,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Bei',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      RangeSlider(
+                        values: RangeValues(_minPrice, _maxPrice),
+                        min: 0,
+                        max: 2000000,
+                        divisions: 20,
+                        labels: RangeLabels(
+                          'TZS ${_minPrice.toInt()}',
+                          'TZS ${_maxPrice.toInt()}',
+                        ),
+                        onChanged: (values) => setStateBottomSheet(() {
+                          _minPrice = values.start;
+                          _maxPrice = values.end;
+                        }),
+                        activeColor: primaryColor,
                       ),
                       const SizedBox(height: 8),
-
-                      // Anwani (using RentalSpot helper)
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(
-                            Icons.location_on_rounded,
-                            size: 16,
-                            color: Colors.grey[600],
+                          Text(
+                            'TZS ${_minPrice.toInt()}',
+                            style: TextStyle(color: subtextColor),
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              spot.getShortAddress(),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
+                          Text(
+                            'TZS ${_maxPrice.toInt()}',
+                            style: TextStyle(color: subtextColor),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-
-                      // Mwenye nyumba
+                      const SizedBox(height: 32),
+                      Text(
+                        'Aina ya Nyumba',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _propertyTypes.map((type) {
+                          final isSelected = _selectedType == type;
+                          return ChoiceChip(
+                            label: Text(
+                              type,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : textColor,
+                              ),
+                            ),
+                            selected: isSelected,
+                            onSelected: (_) =>
+                                setStateBottomSheet(() => _selectedType = type),
+                            selectedColor: primaryColor,
+                            backgroundColor: isDarkMode
+                                ? Colors.grey[800]
+                                : Colors.grey[100],
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 32),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.grey[50],
+                          color: isDarkMode
+                              ? Colors.green[900]
+                              : Colors.green[50],
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            const CircleAvatar(
-                              backgroundColor: Color(0xFF2E7D32),
-                              child: Icon(Icons.person, color: Colors.white),
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: isDarkMode
+                                  ? Colors.green[300]
+                                  : Colors.green[700],
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    spot.getFullOwnerName(),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    spot.phone,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                'Nyumba ${_markers.length} zimepatikana',
+                                style: TextStyle(
+                                  color: isDarkMode
+                                      ? Colors.green[300]
+                                      : Colors.green[800],
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Maelezo (using RentalSpot helper)
-                      Text(
-                        spot.getShortDescription(),
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.grey[700],
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Details chips
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildDetailChip(
-                            Icons.bed_rounded,
-                            "${spot.bedrooms} Vyumba",
-                          ),
-                          _buildDetailChip(
-                            Icons.calendar_today_rounded,
-                            "${spot.formattedPrice}/mwezi",
-                          ),
-                          _buildDetailChip(
-                            Icons.check_circle_rounded,
-                            spot.status,
-                          ),
-                        ],
-                      ),
                       const SizedBox(height: 24),
-
-                      // Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                _showSuccessMessage(
-                                  "Imeongezwa kwenye favorites",
-                                );
-                              },
-                              icon: const Icon(Icons.favorite_border_rounded),
-                              label: const Text('Weka Favoriti'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF2E7D32),
-                                side: const BorderSide(
-                                  color: Color(0xFF2E7D32),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _showRentalDetails(spot);
-                              },
-                              icon: const Icon(Icons.phone_rounded),
-                              label: const Text('Piga Simu'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF2E7D32),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Button ya maelezo kamili
                       SizedBox(
                         width: double.infinity,
                         height: 56,
-                        child: OutlinedButton.icon(
+                        child: FilledButton(
                           onPressed: () {
+                            _refreshMarkers();
                             Navigator.pop(context);
-                            _showRentalDetails(spot);
                           },
-                          icon: const Icon(Icons.info_outline_rounded),
-                          label: const Text('Angalia Maelezo Kamili'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF2E7D32),
-                            side: const BorderSide(color: Color(0xFF2E7D32)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: primaryColor,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Tumia Vigezo',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -976,45 +788,836 @@ class _CustomMapPageState extends State<CustomMapPage> {
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _buildDetailChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green[100]!),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF2E7D32)),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.green[800],
-              fontWeight: FontWeight.w500,
-            ),
+  void _showPropertyBottomSheet(RentalSpot spot) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isLoggedIn = authProvider.isLoggedIn;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: isLoggedIn
+            ? MediaQuery.of(context).size.height * 0.75
+            : MediaQuery.of(context).size.height * 0.55,
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
           ),
-        ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: isLoggedIn ? 200 : 140,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                      ),
+                      child: spot.hasImages()
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: CachedNetworkImage(
+                                imageUrl: spot.getFirstImage()!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                placeholder: (_, __) => Center(
+                                  child: CircularProgressIndicator(
+                                    color: primaryColor,
+                                  ),
+                                ),
+                                errorWidget: (_, __, ___) => Icon(
+                                  Icons.broken_image,
+                                  size: 40,
+                                  color: isDarkMode
+                                      ? Colors.grey[600]
+                                      : Colors.grey,
+                                ),
+                              ),
+                            )
+                          : Center(
+                              child: Icon(
+                                Icons.home_rounded,
+                                size: 50,
+                                color: isDarkMode
+                                    ? Colors.grey[600]
+                                    : Colors.grey[400],
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      spot.name,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getMarkerColor(spot.type).withAlpha(26),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        spot.type,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _getMarkerColor(spot.type),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // VIDEO SECTION
+                    if (spot.videos.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Video za Nyumba:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 180,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: spot.videos.length,
+                          itemBuilder: (context, index) {
+                            final videoUrl = spot.videos[index];
+                            final hasThumbnail =
+                                spot.videoThumbnails.length > index;
+                            return GestureDetector(
+                              onTap: () => _playVideo(videoUrl),
+                              child: Container(
+                                width: 140,
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.black,
+                                  image: hasThumbnail
+                                      ? DecorationImage(
+                                          image: NetworkImage(
+                                            spot.videoThumbnails[index],
+                                          ),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.play_circle_filled,
+                                      size: 50,
+                                      color: Colors.white.withOpacity(0.9),
+                                    ),
+                                    Positioned(
+                                      bottom: 8,
+                                      right: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Video',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Owner Name Preview
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.grey[800] : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDarkMode
+                              ? Colors.grey[700]!
+                              : Colors.grey[200]!,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withAlpha(26),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: primaryColor,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Mwenye Nyumba',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: subtextColor,
+                                  ),
+                                ),
+                                Text(
+                                  spot.getFullOwnerName(),
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Price and Bedrooms
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isDarkMode
+                                  ? Colors.green[900]
+                                  : Colors.green[50],
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.money_rounded,
+                                  color: primaryColor,
+                                  size: 18,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  spot.formattedPrice,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: primaryColor,
+                                  ),
+                                ),
+                                Text(
+                                  '/mwezi',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: subtextColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isDarkMode
+                                  ? Colors.blue[900]
+                                  : Colors.blue[50],
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.bed_rounded,
+                                  color: Colors.blue,
+                                  size: 18,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${spot.bedrooms}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                Text(
+                                  'vyumba',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: subtextColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Address
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_rounded,
+                          size: 14,
+                          color: subtextColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            spot.getFormattedAddress(),
+                            style: TextStyle(fontSize: 12, color: subtextColor),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Logged-in user full details
+                    if (isLoggedIn) ...[
+                      if (spot.hasAnyFeature) ...[
+                        Text(
+                          'Vipengele vya Nyumba:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: spot
+                              .getAllHouseFeatures()
+                              .map(
+                                (feature) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withAlpha(26),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    feature,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDarkMode
+                              ? Colors.green[900]
+                              : Colors.green[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDarkMode
+                                ? Colors.green[800]!
+                                : Colors.green[200]!,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.phone_rounded,
+                              color: primaryColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Namba ya Simu',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: subtextColor,
+                                    ),
+                                  ),
+                                  Text(
+                                    spot.phone,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () async {
+                                final uri = Uri.parse('tel:${spot.phone}');
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri);
+                                }
+                              },
+                              icon: Icon(
+                                Icons.call,
+                                color: primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (spot.hasDeposit())
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? Colors.orange[900]
+                                : Colors.orange[50],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.savings_rounded,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Deposit',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: subtextColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      NumberFormat.currency(
+                                        locale: 'sw_TZ',
+                                        symbol: 'TZS ',
+                                        decimalDigits: 0,
+                                      ).format(spot.depositAmount!),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      if (spot.hasDeposit()) const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _navigateToFullDetails(spot);
+                              },
+                              icon: const Icon(Icons.info_outline_rounded),
+                              label: const Text('Maelezo Kamili'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: primaryColor,
+                                side: BorderSide(color: primaryColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () async {
+                                final uri = Uri.parse('tel:${spot.phone}');
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri);
+                                }
+                              },
+                              icon: const Icon(Icons.phone_rounded),
+                              label: const Text('Piga Simu'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDarkMode
+                              ? Colors.grey[800]
+                              : Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDarkMode
+                                ? Colors.grey[700]!
+                                : Colors.grey[200]!,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              size: 40,
+                              color: primaryColor,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Maelezo Kamili Yamefungwa',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Ingia ili kuona namba ya simu, maelezo kamili na vipengele vya nyumba',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subtextColor,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _showLoginDialog(spot);
+                                },
+                                icon: const Icon(Icons.login_rounded),
+                                label: const Text('Ingia Ili Kuona Zaidi'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          '🔒 Maelezo kamili yanahitaji kuingia',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDarkMode
+                                ? Colors.grey[500]
+                                : Colors.grey[500],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // 🔥 MODIFIED: Show rental details using RentalSpot directly
-  void _showRentalDetails(RentalSpot spot) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => RentalDetailScreen(spot: spot)),
+  void _showLoginDialog(RentalSpot spot) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(51),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withAlpha(26),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.lock_outline_rounded,
+                        size: 54,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Login Required',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Unahitaji kuingia ili kuona maelezo kamili ya nyumba hii',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: subtextColor,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.grey[800] : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDarkMode
+                              ? Colors.grey[700]!
+                              : Colors.grey[200]!,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildLockedRow(Icons.phone_rounded, 'Namba ya simu'),
+                          const Divider(height: 12),
+                          _buildLockedRow(
+                            Icons.description_rounded,
+                            'Maelezo kamili',
+                          ),
+                          const Divider(height: 12),
+                          _buildLockedRow(
+                            Icons.build_rounded,
+                            'Vipengele vya nyumba',
+                          ),
+                          const Divider(height: 12),
+                          _buildLockedRow(
+                            Icons.attach_money_rounded,
+                            'Deposit & fees',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: subtextColor,
+                              side: BorderSide(
+                                color: isDarkMode
+                                    ? Colors.grey[600]!
+                                    : Colors.grey[300]!,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Sasa'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _navigateToLogin(spot);
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Ingia Sasa'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _navigateToRegister();
+                      },
+                      child: Text(
+                        'Bado huna akaunti? Jisajili',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: primaryColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
+  Widget _buildLockedRow(IconData icon, String label) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: subtextColor),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 13, color: subtextColor),
+          ),
+        ),
+        Icon(
+          Icons.lock,
+          size: 14,
+          color: isDarkMode ? Colors.grey[600] : Colors.grey,
+        ),
+      ],
+    );
+  }
+
+  void _playVideo(String videoUrl) async {
+    final uri = Uri.parse(videoUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Haikuweza kufungua video.')),
+      );
+    }
+  }
+
+  void _navigateToFullDetails(RentalSpot spot) => Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => RentalDetailScreen(spot: spot)),
+  );
+  void _navigateToLogin(RentalSpot spot) =>
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginPage()),
+      ).then((_) {
+        if (mounted) _refreshMarkers();
+      });
+  void _navigateToRegister() => Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => const RegisterPage()),
+  );
   void _refreshMarkers() {
     setState(() {
       _markers.clear();
@@ -1036,31 +1639,17 @@ class _CustomMapPageState extends State<CustomMapPage> {
   }
 
   void _searchProperties(String query) {
-    setState(() {
-      _searchQuery = query;
-    });
+    setState(() => _searchQuery = query);
     _refreshMarkers();
   }
 
-  void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
+  void _showError(String message) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.red,
+      duration: const Duration(seconds: 3),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1076,16 +1665,14 @@ class _CustomMapPageState extends State<CustomMapPage> {
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             markers: {..._markers, ..._universityMarkers},
-            onMapCreated: (GoogleMapController controller) {
-              _controller.complete(controller);
-            },
+            onMapCreated: (controller) => _controller.complete(controller),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 100,
               bottom: 20,
             ),
+            style: isDarkMode ? _getDarkMapStyle() : null,
           ),
-
-          // Search Bar
+          // Search bar
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
             left: 16,
@@ -1093,39 +1680,46 @@ class _CustomMapPageState extends State<CustomMapPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: searchBarBg,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
                     color: Colors.black26,
                     blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    offset: Offset(0, 4),
                   ),
                 ],
               ),
               child: Row(
                 children: [
-                  Icon(Icons.search_rounded, color: Colors.grey[600]),
+                  Icon(
+                    Icons.search_rounded,
+                    color: isDarkMode ? Colors.white70 : Colors.grey[600],
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
                       controller: _searchController,
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
                         hintText: 'Tafuta nyumba, eneo, bei...',
                         border: InputBorder.none,
-                        hintStyle: TextStyle(color: Colors.grey),
+                        hintStyle: TextStyle(
+                          color: isDarkMode ? Colors.grey[500] : Colors.grey,
+                        ),
                       ),
                       onChanged: _searchProperties,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(width: 1, height: 24, color: Colors.grey[300]),
+                  Container(
+                    width: 1,
+                    height: 24,
+                    color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+                  ),
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(
-                      Icons.filter_list_rounded,
-                      color: Color(0xFF2E7D32),
-                    ),
+                    icon: Icon(Icons.filter_list_rounded, color: primaryColor),
                     onPressed: _showFiltersBottomSheet,
                     tooltip: "Chuja",
                   ),
@@ -1133,7 +1727,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
               ),
             ),
           ),
-
           // University filter indicator
           if (_selectedUniversity != 'Zote' && !_isLoading)
             Positioned(
@@ -1160,9 +1753,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                     const SizedBox(width: 6),
                     GestureDetector(
                       onTap: () {
-                        setState(() {
-                          _selectedUniversity = 'Zote';
-                        });
+                        setState(() => _selectedUniversity = 'Zote');
                         _refreshMarkers();
                       },
                       child: const Icon(
@@ -1175,7 +1766,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
                 ),
               ),
             ),
-
           // Counter badge
           if (_markers.isNotEmpty && !_isLoading)
             Positioned(
@@ -1187,7 +1777,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32),
+                  color: primaryColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1209,35 +1799,32 @@ class _CustomMapPageState extends State<CustomMapPage> {
                 ),
               ),
             ),
-
-          // My Location Button
+          // My Location
           Positioned(
             bottom: 100,
             right: 16,
             child: FloatingActionButton(
               onPressed: _determinePosition,
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF2E7D32),
+              backgroundColor: searchBarBg,
+              foregroundColor: primaryColor,
               elevation: 4,
               child: const Icon(Icons.my_location_rounded),
             ),
           ),
-
-          // Refresh Button
+          // Refresh
           Positioned(
             bottom: 170,
             right: 16,
             child: FloatingActionButton(
               onPressed: _refreshMarkers,
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF2E7D32),
+              backgroundColor: searchBarBg,
+              foregroundColor: primaryColor,
               elevation: 4,
               mini: true,
               child: const Icon(Icons.refresh_rounded),
             ),
           ),
-
-          // Reset Filters Button
+          // Reset Filters
           if ((_selectedType != 'Zote' ||
               _minPrice > 0 ||
               _maxPrice < 1000000 ||
@@ -1247,7 +1834,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
               right: 16,
               child: FloatingActionButton(
                 onPressed: _resetFilters,
-                backgroundColor: Colors.white,
+                backgroundColor: searchBarBg,
                 foregroundColor: Colors.orange,
                 elevation: 4,
                 mini: true,
@@ -1255,22 +1842,74 @@ class _CustomMapPageState extends State<CustomMapPage> {
               ),
             ),
 
+          // 🔥 NEW: Retry button when no houses and not loading (network error)
+          if (!_isLoading && _rentalSpots.isEmpty && _markers.isEmpty)
+            Positioned.fill(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 10),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.wifi_off,
+                        size: 60,
+                        color: Colors.red.shade300,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Imeshindwa kupakia nyumba',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tafadhali angalia muunganisho wako wa intaneti',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: subtextColor),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: () => _loadRentalSpotsFromAPI(),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Jaribu Tena'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // Loading indicator
           if (_isLoading)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
+                color: Colors.black.withAlpha(77),
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: loadingBg,
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
+                      boxShadow: const [
                         BoxShadow(
                           color: Colors.black26,
                           blurRadius: 16,
-                          offset: const Offset(0, 4),
+                          offset: Offset(0, 4),
                         ),
                       ],
                     ),
@@ -1283,126 +1922,20 @@ class _CustomMapPageState extends State<CustomMapPage> {
                           width: 80,
                         ),
                         const SizedBox(height: 12),
-                        const Text(
+                        Text(
                           "Inapakia nyumba...",
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF2E7D32),
+                            color: primaryColor,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           "${_rentalSpots.length} nyumba zimepatikana",
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(color: subtextColor),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
-            ),
-
-          // No results message
-          if (!_isLoading && _markers.isEmpty && _rentalSpots.isNotEmpty)
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.center,
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  margin: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.search_off_rounded,
-                        size: 60,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "Hakuna nyumba zilizopatika",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Chagua vigezo vingine au weka utafutaji tofauti",
-                        style: TextStyle(color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _resetFilters,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D32),
-                        ),
-                        child: const Text('Sawazisha Vigezo'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // No houses registered message
-          if (!_isLoading && _rentalSpots.isEmpty)
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.center,
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  margin: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.home_work_rounded,
-                        size: 60,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "Hakuna nyumba zilizosajiliwa",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Sajili nyumba yako kwanza kupitia menu ya nyumba",
-                        style: TextStyle(color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
                   ),
                 ),
               ),
@@ -1411,6 +1944,29 @@ class _CustomMapPageState extends State<CustomMapPage> {
       ),
     );
   }
+
+  String _getDarkMapStyle() => '''
+    [
+      {"elementType": "geometry", "stylers": [{"color": "#242f3e"}]},
+      {"elementType": "labels.text.fill", "stylers": [{"color": "#746855"}]},
+      {"elementType": "labels.text.stroke", "stylers": [{"color": "#242f3e"}]},
+      {"featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
+      {"featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
+      {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#263c3f"}]},
+      {"featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{"color": "#6b9a76"}]},
+      {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#38414e"}]},
+      {"featureType": "road", "elementType": "geometry.stroke", "stylers": [{"color": "#212a37"}]},
+      {"featureType": "road", "elementType": "labels.text.fill", "stylers": [{"color": "#9ca5b3"}]},
+      {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#746855"}]},
+      {"featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{"color": "#1f2835"}]},
+      {"featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{"color": "#f3d19c"}]},
+      {"featureType": "transit", "elementType": "geometry", "stylers": [{"color": "#2f3948"}]},
+      {"featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
+      {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#17263c"}]},
+      {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#515c6d"}]},
+      {"featureType": "water", "elementType": "labels.text.stroke", "stylers": [{"color": "#17263c"}]}
+    ]
+  ''';
 
   @override
   void dispose() {

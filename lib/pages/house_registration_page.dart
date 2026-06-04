@@ -1,20 +1,30 @@
-// lib/pages/house_registration_page.dart
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmap;
 import 'package:lottie/lottie.dart';
+import 'package:provider/provider.dart';
 import 'package:serkapp/model/house_data.dart';
-import 'package:serkapp/pages/rental_home_page.dart'; // 🔥 ADDED: ApiService
+import 'package:serkapp/pages/login_page.dart';
 import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/widgets/advanced_location_picker.dart';
+import '../providers/theme_provider.dart';
+import 'package:video_compress/video_compress.dart';
 
 class HouseRegistrationForm extends StatefulWidget {
-  final Function(HouseData) onHouseAdded;
+  final Function(HouseData?)? onHouseAdded;
+  final HouseData? existingHouse;
 
-  const HouseRegistrationForm({super.key, required this.onHouseAdded});
+  const HouseRegistrationForm({
+    super.key,
+    this.onHouseAdded,
+    this.existingHouse,
+  });
 
   @override
   State<HouseRegistrationForm> createState() => _HouseRegistrationFormState();
@@ -23,7 +33,7 @@ class HouseRegistrationForm extends StatefulWidget {
 class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
   final _formKey = GlobalKey<FormState>();
 
-  // ========== CONTROLLERS ZA FORM FIELDS ==========
+  // Controllers
   final TextEditingController _brandNameController = TextEditingController();
   final TextEditingController _houseNumberController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -37,29 +47,123 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  // ========== IMAGE HANDLING ==========
+  final TextEditingController _customBedroomController =
+      TextEditingController();
+
+  // Image and video handling
   final List<XFile> _selectedImages = [];
+  final List<XFile> _selectedVideos = [];
   final ImagePicker _picker = ImagePicker();
 
-  // ========== LOCATION HANDLING ==========
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingHouse != null) {
+      _loadHouseDataForEdit(widget.existingHouse!);
+    }
+  }
+
+  void _loadHouseDataForEdit(HouseData house) {
+    _brandNameController.text = house.firstName;
+    _houseNameController.text = house.name;
+    _houseNumberController.text = house.lastName;
+    _phoneController.text = house.phone;
+    _altPhoneController.text = ''; // API doesn't have altPhone, leave empty
+    _rentPriceController.text = house.rentPrice.toString();
+    _depositController.text = house.depositAmount?.toString() ?? '';
+    _locationDescriptionController.text = house.address;
+    _descriptionController.text = house.description;
+    _nearbyAmenitiesController.text = house.nearbyAmenities;
+
+    // Booleans
+    _waterIncluded = house.waterIncluded;
+    _electricityIncluded = house.electricityIncluded;
+    _internetIncluded = house.internetIncluded;
+    _hasCeiling = house.hasCeiling;
+    _hasAluminium = house.hasAluminium;
+    _hasCeilingBoard = house.hasCeilingBoard;
+    _hasTiles = house.hasTiles;
+    _hasFence = house.hasFence;
+    _isSelfContainer = house.layoutType == 'self_container';
+    _hasPrivateBathroom = house.hasPrivateBathroom;
+    _hasPrivateToilet = house.hasPrivateToilet;
+    _hasPrivateKitchen = house.hasPrivateKitchen;
+    _isSharedBathroom = house.isSharedBathroom;
+    _isSharedToilet = house.isSharedToilet;
+    _isSharedKitchen = house.isSharedKitchen;
+
+    // Location hierarchy
+    _selectedRegion = house.region;
+    _selectedDistrict = house.district;
+    _selectedDivision = house.division;
+    _selectedWard = house.ward;
+    _selectedVillage = house.village;
+    _selectedStreet = house.street;
+
+    // House type
+    if (_houseTypes.contains(house.type)) {
+      _selectedHouseType = house.type;
+    }
+
+    // Bedrooms
+    final bedrooms = house.bedrooms;
+    if (bedrooms > 6) {
+      _useCustomBedrooms = true;
+      _selectedBedrooms = bedrooms;
+      _customBedroomController.text = bedrooms.toString();
+    } else {
+      _useCustomBedrooms = false;
+      _selectedBedrooms = bedrooms;
+    }
+
+    // Location on map
+    if (house.latitude != null && house.longitude != null) {
+      _selectedLocation = gmap.LatLng(house.latitude!, house.longitude!);
+    }
+  }
+
+  // Location handling
   gmap.LatLng? _selectedLocation;
+  // ignore: unused_field
   String _locationAddress = "";
 
-  // ========== STEP NA LOADING STATES ==========
+  // Upload progress details
+  double _uploadProgress = 0.0;
+  String _currentFileStatus = "Inaandaa...";
+  int _uploadedCount = 0;
+  int _totalFiles = 0;
+
+  // Step and loading states
   int _currentStep = 0;
   bool _isSubmitting = false;
-  double _uploadProgress = 0.0;
 
-  // ========== HOUSE DETAILS ==========
+  // House details
   String _selectedHouseType = 'Nyumba ya Kawaida';
   int _selectedBedrooms = 1;
+  bool _useCustomBedrooms = false;
 
-  // ========== AMENITIES INCLUDED IN RENT ==========
+  // TOGGLE FEATURES FOR HOUSE
+  bool _hasCeiling = false;
+  bool _hasAluminium = false;
+  bool _hasCeilingBoard = false;
+  bool _hasTiles = false;
+  bool _hasFence = false;
+
+  // TOGGLE FEATURES FOR LAYOUT
+  bool _isSelfContainer = true;
+  bool _hasPrivateBathroom = true;
+  bool _hasPrivateToilet = true;
+  bool _hasPrivateKitchen = true;
+  bool _isSharedBathroom = false;
+  bool _isSharedToilet = false;
+  bool _isSharedKitchen = false;
+
+  // Amenities
   bool _waterIncluded = false;
   bool _electricityIncluded = false;
   bool _internetIncluded = false;
 
-  // ========== FULL LOCATION HIERARCHY ==========
+  // Location hierarchy
   String _selectedRegion = '';
   String _selectedDistrict = '';
   String _selectedDivision = '';
@@ -77,10 +181,52 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     'Biashara',
   ];
 
+  // Dynamic colors getters using ThemeProvider
+  Color get primaryColor => Provider.of<ThemeProvider>(context).isDarkMode
+      ? const Color(0xFF4CAF50)
+      : const Color(0xFF2E7D32);
+
+  Color get backgroundColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? const Color(0xFF121212)
+      : Colors.white;
+
+  Color get surfaceColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? const Color(0xFF1E1E1E)
+      : Colors.white;
+
+  Color get textColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? Colors.white
+      : Colors.black87;
+
+  Color get subtextColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? Colors.grey[400]!
+      : Colors.grey[600]!;
+
+  Color get inputFillColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? Colors.grey[900]!
+      : Colors.grey[50]!;
+
+  Color get borderColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? Colors.grey[800]!
+      : Colors.grey[300]!;
+
+  Color get cardBgColor =>
+      Provider.of<ThemeProvider>(context, listen: false).isDarkMode
+      ? const Color(0xFF1E1E1E)
+      : Colors.white;
+
   @override
   Widget build(BuildContext context) {
+    Provider.of<ThemeProvider>(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: _isSubmitting ? _buildLoadingScreen() : _buildForm(),
       ),
@@ -108,35 +254,38 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 child: CircularProgressIndicator(
                   value: _uploadProgress,
                   strokeWidth: 8,
-                  backgroundColor: Colors.grey[300],
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    const Color(0xFF2E7D32),
+                  backgroundColor:
+                      Provider.of<ThemeProvider>(context).isDarkMode
+                      ? Colors.grey[800]
+                      : Colors.grey[300],
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF2E7D32),
                   ),
                 ),
               ),
               Text(
                 "${(_uploadProgress * 100).toStringAsFixed(0)}%",
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF2E7D32),
+                  color: Color(0xFF2E7D32),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          Text(
+          const Text(
             "Inasajiliwa...",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF2E7D32),
+              color: Color(0xFF2E7D32),
             ),
           ),
           const SizedBox(height: 10),
           Text(
-            "Tafadhali subiri...",
-            style: TextStyle(fontSize: 14, color: Colors.grey),
+            _currentFileStatus,
+            style: TextStyle(fontSize: 14, color: subtextColor),
           ),
         ],
       ),
@@ -147,14 +296,14 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     return Column(
       children: [
         Container(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: surfaceColor,
             boxShadow: [
               BoxShadow(
                 color: Colors.black12,
                 blurRadius: 10,
-                offset: Offset(0, 2),
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -162,25 +311,22 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             children: [
               IconButton(
                 onPressed: () => Navigator.maybePop(context),
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: const Color(0xFF2E7D32),
-                ),
+                icon: Icon(Icons.arrow_back_rounded, color: primaryColor),
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
                 "Usajili wa Nyumba",
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2E7D32),
+                  color: primaryColor,
                 ),
               ),
-              Spacer(),
+              const Spacer(),
               Text(
                 "Hatua ${_currentStep + 1}/4",
                 style: TextStyle(
-                  color: Colors.grey[600],
+                  color: subtextColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -189,18 +335,20 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         ),
         LinearProgressIndicator(
           value: (_currentStep + 1) / 4,
-          backgroundColor: Colors.grey[200],
-          valueColor: AlwaysStoppedAnimation<Color>(const Color(0xFF2E7D32)),
+          backgroundColor: Provider.of<ThemeProvider>(context).isDarkMode
+              ? Colors.grey[800]
+              : Colors.grey[200],
+          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
           minHeight: 4,
         ),
         Expanded(
           child: SingleChildScrollView(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildStepContent(),
-                SizedBox(height: 32),
+                const SizedBox(height: 32),
                 Row(
                   children: [
                     if (_currentStep > 0)
@@ -208,31 +356,31 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                         child: OutlinedButton(
                           onPressed: _goToPreviousStep,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF2E7D32),
-                            side: BorderSide(color: const Color(0xFF2E7D32)),
-                            minimumSize: Size.fromHeight(50),
+                            foregroundColor: primaryColor,
+                            side: BorderSide(color: primaryColor),
+                            minimumSize: const Size.fromHeight(50),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: Text("Nyuma"),
+                          child: const Text("Nyuma"),
                         ),
                       ),
-                    if (_currentStep > 0) SizedBox(width: 12),
+                    if (_currentStep > 0) const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
                         onPressed: _goToNextStep,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D32),
+                          backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
-                          minimumSize: Size.fromHeight(50),
+                          minimumSize: const Size.fromHeight(50),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         child: Text(
                           _currentStep == 3 ? "Maliza Usajili" : "Endelea",
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -275,36 +423,29 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             ),
           ),
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         Text(
           'Taarifa Binafsi',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF2E7D32),
+            color: primaryColor,
           ),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
           'Weka taarifa zako za mawasiliano',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtextColor, fontSize: 16),
         ),
-        SizedBox(height: 32),
+        const SizedBox(height: 32),
         Form(
           key: _formKey,
           child: Column(
             children: [
-              TextFormField(
+              _buildTextField(
                 controller: _brandNameController,
-                decoration: InputDecoration(
-                  labelText: 'Jina Maarufu',
-                  prefixIcon: Icon(Icons.home_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
+                label: 'Jina Maarufu',
+                icon: Icons.home_rounded,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka jina maarufu la nyumba";
@@ -312,18 +453,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                   return null;
                 },
               ),
-              SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 16),
+              _buildTextField(
                 controller: _houseNameController,
-                decoration: InputDecoration(
-                  labelText: 'Jina la Mwenye Nyumba',
-                  prefixIcon: Icon(Icons.apartment_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
+                label: 'Jina la Mwenye Nyumba',
+                icon: Icons.apartment_rounded,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka jina mwenye nyumba";
@@ -331,18 +465,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                   return null;
                 },
               ),
-              SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 16),
+              _buildTextField(
                 controller: _houseNumberController,
-                decoration: InputDecoration(
-                  labelText: 'Namba ya Nyumba',
-                  prefixIcon: Icon(Icons.numbers_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
+                label: 'Namba ya Nyumba',
+                icon: Icons.numbers_rounded,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka namba ya nyumba";
@@ -350,18 +477,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                   return null;
                 },
               ),
-              SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 16),
+              _buildTextField(
                 controller: _phoneController,
-                decoration: InputDecoration(
-                  labelText: 'Namba ya Simu',
-                  prefixIcon: Icon(Icons.phone_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
+                label: 'Namba ya Simu',
+                icon: Icons.phone_rounded,
                 keyboardType: TextInputType.phone,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -373,24 +493,51 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                   return null;
                 },
               ),
-              SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 16),
+              _buildTextField(
                 controller: _altPhoneController,
-                decoration: InputDecoration(
-                  labelText: 'Namba Mbadala ya Simu (Si lazima)',
-                  prefixIcon: Icon(Icons.phone_iphone_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                ),
+                label: 'Namba Mbadala ya Simu (Si lazima)',
+                icon: Icons.phone_iphone_rounded,
                 keyboardType: TextInputType.phone,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: TextStyle(fontSize: 15, color: textColor),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: subtextColor),
+        prefixIcon: Icon(icon, color: primaryColor),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 1.5),
+        ),
+        filled: true,
+        fillColor: inputFillColor,
+      ),
+      validator: validator,
     );
   }
 
@@ -408,37 +555,42 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             ),
           ),
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         Text(
           'Maelezo ya Nyumba',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF2E7D32),
+            color: primaryColor,
           ),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
           'Weka maelezo kamili ya nyumba unayopanga',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtextColor, fontSize: 16),
         ),
-        SizedBox(height: 32),
+        const SizedBox(height: 32),
         Column(
           children: [
+            // AINA YA NYUMBA
             Container(
               width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
+                border: Border.all(color: borderColor),
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.grey[50],
+                color: inputFillColor,
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedHouseType,
-                  icon: Icon(Icons.arrow_drop_down_rounded),
+                  icon: Icon(
+                    Icons.arrow_drop_down_rounded,
+                    color: subtextColor,
+                  ),
                   isExpanded: true,
-                  style: TextStyle(fontSize: 16, color: Colors.black87),
+                  style: TextStyle(fontSize: 16, color: textColor),
+                  dropdownColor: surfaceColor,
                   onChanged: (String? newValue) {
                     setState(() {
                       _selectedHouseType = newValue!;
@@ -455,46 +607,444 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 ),
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
+
+            // IDADI YA VYUMBA
             Container(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(color: borderColor),
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.grey[50],
+                color: inputFillColor,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Idadi ya Vyumba vya Kulala',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[700],
-                    ),
+                  Row(
+                    children: [
+                      Icon(Icons.bed_rounded, color: primaryColor, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Idadi ya Vyumba vya Kulala',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 12),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: List.generate(6, (index) {
-                      final bedrooms = index + 1;
-                      return ChoiceChip(
-                        label: Text('$bedrooms'),
-                        selected: _selectedBedrooms == bedrooms,
+                    children: [
+                      ...List.generate(6, (index) {
+                        final bedrooms = index + 1;
+                        return ChoiceChip(
+                          label: Text('$bedrooms'),
+                          selected:
+                              !_useCustomBedrooms &&
+                              _selectedBedrooms == bedrooms,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _useCustomBedrooms = false;
+                                _selectedBedrooms = bedrooms;
+                                _customBedroomController.clear();
+                              }
+                            });
+                          },
+                          selectedColor: primaryColor,
+                          backgroundColor: inputFillColor,
+                          labelStyle: TextStyle(
+                            color:
+                                !_useCustomBedrooms &&
+                                    _selectedBedrooms == bedrooms
+                                ? Colors.white
+                                : textColor,
+                          ),
+                        );
+                      }),
+                      ChoiceChip(
+                        label: const Text('Zaidi ya 6'),
+                        selected: _useCustomBedrooms,
                         onSelected: (selected) {
                           setState(() {
-                            _selectedBedrooms = bedrooms;
+                            _useCustomBedrooms = selected;
+                            if (!selected &&
+                                _customBedroomController.text.isNotEmpty) {
+                              _selectedBedrooms =
+                                  int.tryParse(_customBedroomController.text) ??
+                                  7;
+                            }
                           });
                         },
-                        selectedColor: const Color(0xFF2E7D32),
+                        selectedColor: primaryColor,
+                        backgroundColor: inputFillColor,
                         labelStyle: TextStyle(
-                          color: _selectedBedrooms == bedrooms
-                              ? Colors.white
-                              : Colors.black87,
+                          color: _useCustomBedrooms ? Colors.white : textColor,
                         ),
-                      );
-                    }),
+                      ),
+                    ],
+                  ),
+                  if (_useCustomBedrooms) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _customBedroomController,
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        labelText: 'Weka idadi ya vyumba',
+                        labelStyle: TextStyle(color: subtextColor),
+                        hintText: 'Mfano: 7, 8, 10',
+                        hintStyle: TextStyle(color: subtextColor),
+                        prefixIcon: Icon(
+                          Icons.edit_note_rounded,
+                          size: 20,
+                          color: primaryColor,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2E7D32),
+                            width: 1.5,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: inputFillColor,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (value) {
+                        if (value.isNotEmpty) {
+                          _selectedBedrooms = int.tryParse(value) ?? 7;
+                        }
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Colors.blue.shade700,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Chagua idadi ya vyumba vya kulala. Kama idadi ni zaidi ya 6, chagua "Zaidi ya 6" na uweke idadi mwenyewe.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // AINA YA MPANGILIO
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(12),
+                color: inputFillColor,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.apartment_rounded,
+                        color: primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Aina ya Mpangilio',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildToggleCard(
+                          title: 'Self Container',
+                          subtitle: 'Vyumba vyake ndani',
+                          isSelected: _isSelfContainer,
+                          onTap: () {
+                            setState(() {
+                              _isSelfContainer = true;
+                              _hasPrivateBathroom = true;
+                              _hasPrivateToilet = true;
+                              _hasPrivateKitchen = true;
+                              _isSharedBathroom = false;
+                              _isSharedToilet = false;
+                              _isSharedKitchen = false;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildToggleCard(
+                          title: 'Shared',
+                          subtitle: 'Bafu/Jiko la kushiriki',
+                          isSelected: !_isSelfContainer,
+                          onTap: () {
+                            setState(() {
+                              _isSelfContainer = false;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!_isSelfContainer) ...[
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Vifaa vinavyoshirikishwa:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilterChip(
+                          label: const Text('Bafu'),
+                          selected: _isSharedBathroom,
+                          onSelected: (val) =>
+                              setState(() => _isSharedBathroom = val),
+                          selectedColor: primaryColor.withAlpha(51),
+                          backgroundColor: inputFillColor,
+                          checkmarkColor: primaryColor,
+                          labelStyle: TextStyle(color: textColor),
+                        ),
+                        FilterChip(
+                          label: const Text('Choo'),
+                          selected: _isSharedToilet,
+                          onSelected: (val) =>
+                              setState(() => _isSharedToilet = val),
+                          selectedColor: primaryColor.withAlpha(51),
+                          backgroundColor: inputFillColor,
+                          checkmarkColor: primaryColor,
+                          labelStyle: TextStyle(color: textColor),
+                        ),
+                        FilterChip(
+                          label: const Text('Jikoni'),
+                          selected: _isSharedKitchen,
+                          onSelected: (val) =>
+                              setState(() => _isSharedKitchen = val),
+                          selectedColor: primaryColor.withAlpha(51),
+                          backgroundColor: inputFillColor,
+                          checkmarkColor: primaryColor,
+                          labelStyle: TextStyle(color: textColor),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // VIPENGELE VYA NYUMBA
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(12),
+                color: inputFillColor,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.build_rounded, color: primaryColor, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Vipengele vya Nyumba',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Washa vitu vilivyopo kwenye nyumba yako:',
+                    style: TextStyle(color: subtextColor, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 2.5,
+                    children: [
+                      _buildFeatureToggle(
+                        icon: Icons.roofing,
+                        label: 'Fansi (Ceiling)',
+                        value: _hasCeiling,
+                        onChanged: (val) => setState(() => _hasCeiling = val),
+                      ),
+                      _buildFeatureToggle(
+                        icon: Icons.window_rounded,
+                        label: 'Aluminiam Windows',
+                        value: _hasAluminium,
+                        onChanged: (val) => setState(() => _hasAluminium = val),
+                      ),
+                      _buildFeatureToggle(
+                        icon: Icons.grid_on_rounded,
+                        label: 'Ceiling Board',
+                        value: _hasCeilingBoard,
+                        onChanged: (val) =>
+                            setState(() => _hasCeilingBoard = val),
+                      ),
+                      _buildFeatureToggle(
+                        icon: Icons.square_foot_rounded,
+                        label: 'Tiles',
+                        value: _hasTiles,
+                        onChanged: (val) => setState(() => _hasTiles = val),
+                      ),
+                      _buildFeatureToggle(
+                        icon: Icons.fence_rounded,
+                        label: 'Fence / Uzio',
+                        value: _hasFence,
+                        onChanged: (val) => setState(() => _hasFence = val),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.touch_app,
+                          size: 16,
+                          color: Colors.orange.shade700,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Bonyeza kuwasha/kuzima kipengele chochote kilichopo nyumbani kwako',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // MAELEZO YA ZIADA
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(12),
+                color: inputFillColor,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.description_rounded,
+                        color: primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Maelezo ya Ziada',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _descriptionController,
+                    maxLines: 4,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'Andika maelezo ya ziada kuhusu nyumba...',
+                      hintStyle: TextStyle(color: subtextColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E7D32),
+                          width: 1.5,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: inputFillColor,
+                    ),
                   ),
                 ],
               ),
@@ -505,6 +1055,89 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     );
   }
 
+  Widget _buildFeatureToggle({
+    required IconData icon,
+    required String label,
+    required bool value,
+    required Function(bool) onChanged,
+  }) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        decoration: BoxDecoration(
+          color: value ? primaryColor.withAlpha(26) : inputFillColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: value ? primaryColor : borderColor,
+            width: value ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: value ? primaryColor : subtextColor),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: value ? FontWeight.w600 : FontWeight.normal,
+                color: value ? primaryColor : subtextColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleCard({
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColor.withAlpha(26) : inputFillColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? primaryColor : borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              isSelected ? Icons.check_circle : Icons.circle_outlined,
+              color: isSelected ? primaryColor : subtextColor,
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? primaryColor : subtextColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 10, color: subtextColor),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Step 2: Images and Videos
   Widget _buildImagesStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,25 +1152,25 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             ),
           ),
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         Text(
           'Picha za Nyumba',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF2E7D32),
+            color: primaryColor,
           ),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
           'Pakia picha angalau 3 za nyumba kutoka pembe tofauti',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtextColor, fontSize: 16),
         ),
-        SizedBox(height: 32),
+        const SizedBox(height: 32),
         GridView.builder(
           shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
@@ -549,14 +1182,14 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 onTap: _pickImages,
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF2E7D32)),
+                    border: Border.all(color: primaryColor),
                     borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                    color: primaryColor.withAlpha(26),
                   ),
                   child: Icon(
                     Icons.add_a_photo_rounded,
                     size: 32,
-                    color: const Color(0xFF2E7D32),
+                    color: primaryColor,
                   ),
                 ),
               );
@@ -578,12 +1211,12 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                     child: GestureDetector(
                       onTap: () => _removeImage(index - 1),
                       child: Container(
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.red,
                           shape: BoxShape.circle,
                         ),
-                        padding: EdgeInsets.all(4),
-                        child: Icon(
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(
                           Icons.close_rounded,
                           color: Colors.white,
                           size: 16,
@@ -596,18 +1229,50 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             }
           },
         ),
-        SizedBox(height: 16),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: _pickVideos,
+          icon: const Icon(Icons.video_collection_rounded),
+          label: const Text('Ongeza Video'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_selectedVideos.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedVideos
+                .map(
+                  (video) => Chip(
+                    label: Text(
+                      video.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onDeleted: () =>
+                        setState(() => _selectedVideos.remove(video)),
+                    deleteIcon: const Icon(Icons.close, size: 16),
+                    backgroundColor: primaryColor.withAlpha(51),
+                  ),
+                )
+                .toList(),
+          ),
+        const SizedBox(height: 16),
         Container(
-          padding: EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: _selectedImages.length >= 3
-                ? const Color(0xFF2E7D32).withValues(alpha: 0.1)
-                : Colors.orange.withValues(alpha: 0.1),
+                ? primaryColor.withAlpha(26)
+                : Colors.orange.withAlpha(26),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: _selectedImages.length >= 3
-                  ? const Color(0xFF2E7D32)
-                  : Colors.orange,
+              color: _selectedImages.length >= 3 ? primaryColor : Colors.orange,
             ),
           ),
           child: Row(
@@ -615,11 +1280,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
               Icon(
                 _selectedImages.length >= 3 ? Icons.check_circle : Icons.info,
                 color: _selectedImages.length >= 3
-                    ? const Color(0xFF2E7D32)
+                    ? primaryColor
                     : Colors.orange,
                 size: 20,
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _selectedImages.length >= 3
@@ -627,7 +1292,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                       : "Picha ${_selectedImages.length}/3 - Pakia angalau picha 3",
                   style: TextStyle(
                     color: _selectedImages.length >= 3
-                        ? const Color(0xFF2E7D32)
+                        ? primaryColor
                         : Colors.orange,
                     fontSize: 14,
                   ),
@@ -636,6 +1301,14 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             ],
           ),
         ),
+        if (_selectedVideos.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              "Video ${_selectedVideos.length} zimechaguliwa",
+              style: TextStyle(color: primaryColor, fontSize: 13),
+            ),
+          ),
       ],
     );
   }
@@ -654,142 +1327,27 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             ),
           ),
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         Text(
-          'Bei, Maelezo na Eneo',
+          'Bei na Eneo',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF2E7D32),
+            color: primaryColor,
           ),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
-          'Weka bei, maelezo na eneo kamili la nyumba',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          'Weka bei na eneo kamili la nyumba',
+          style: TextStyle(color: subtextColor, fontSize: 16),
         ),
-        SizedBox(height: 32),
+        const SizedBox(height: 32),
         Column(
           children: [
             Card(
+              color: cardBgColor,
               child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '📝 Maelezo ya Nyumba',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF2E7D32),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Andika maelezo kamili kuhusu nyumba yako',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                    SizedBox(height: 16),
-                    TextFormField(
-                      controller: _descriptionController,
-                      maxLines: 6,
-                      decoration: InputDecoration(
-                        labelText: 'Maelezo ya Nyumba *',
-                        hintText: '''
-Mfano wa maelezo:
-- Nyumba ina vyumba 3 vya kulala na vyumba 2 vya kuogea
-- Samani kamili: vitanda, makabati, meza, viti
-- Jikoni la kisasa na vifaa vyote
-- Sehemu ya maegesho na bustani nzuri
-- Usalama wa 24/7 na CCTV
-- Karibu na shule, hospitali, na stendi ya mabasi
-                        ''',
-                        prefixIcon: Icon(Icons.description_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        helperText:
-                            'Elezea kwa kina ili wateja waelewe vizuri (Angalau herufi 20)',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Tafadhali weka maelezo ya nyumba";
-                        }
-                        if (value.length < 20) {
-                          return "Maelezo yanapaswa kuwa na angalau herufi 20";
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        'Herufi: ${_descriptionController.text.length}/500',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _descriptionController.text.length > 500
-                              ? Colors.red
-                              : Colors.grey[500],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Container(
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.lightbulb,
-                            color: Colors.blue[700],
-                            size: 20,
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '💡 Vidokezo vya maelezo bora:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: Colors.blue[800],
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  '• Taja idadi ya vyumba, bafu, na maeneo ya kuegesha\n'
-                                  '• Elezea samani na vifaa vilivyopo\n'
-                                  '• Taja usalama na huduma zilizopo\n'
-                                  '• Elezea ukaribu na shule, hospitali, na stendi',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.blue[700],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -798,119 +1356,92 @@ Mfano wa maelezo:
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF2E7D32),
+                        color: primaryColor,
                       ),
                     ),
-                    SizedBox(height: 16),
-                    TextFormField(
+                    const SizedBox(height: 16),
+                    _buildTextField(
                       controller: _rentPriceController,
-                      decoration: InputDecoration(
-                        labelText: 'Kodi ya Mwezi (TZS)',
-                        prefixIcon: Icon(Icons.money_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        helperText:
-                            'Weka kodi ya kila mwezi kwa shilingi za Tanzania',
-                      ),
+                      label: 'Kodi ya Mwezi (TZS)',
+                      icon: Icons.money_rounded,
                       keyboardType: TextInputType.number,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return "Tafadhali weka bei ya kukodisha";
+                          return "Tafadhali weka bei";
                         }
                         if (double.tryParse(value) == null) {
-                          return "Tafadhali weka namba sahihi";
+                          return "Weka namba sahihi";
                         }
                         return null;
                       },
                     ),
-                    SizedBox(height: 12),
-                    TextFormField(
+                    const SizedBox(height: 12),
+                    _buildTextField(
                       controller: _depositController,
-                      decoration: InputDecoration(
-                        labelText: 'Deposit / Kibali (TZS)',
-                        prefixIcon: Icon(Icons.savings_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        helperText:
-                            'Kiasi cha deposit (kawaida miezi 1-2) - Si lazima',
-                      ),
+                      label: 'Deposit / Kibali (TZS) - Si lazima',
+                      icon: Icons.savings_rounded,
                       keyboardType: TextInputType.number,
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Text(
                       'Yaliyojumuishwa kwenye kodi:',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey[700],
+                        color: textColor,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
                         FilterChip(
-                          label: Text('💧 Maji'),
+                          label: const Text('💧 Maji'),
                           selected: _waterIncluded,
                           onSelected: (val) =>
                               setState(() => _waterIncluded = val),
-                          selectedColor: const Color(
-                            0xFF2E7D32,
-                          ).withValues(alpha: 0.2),
-                          checkmarkColor: const Color(0xFF2E7D32),
+                          selectedColor: primaryColor.withAlpha(51),
+                          backgroundColor: inputFillColor,
+                          checkmarkColor: primaryColor,
+                          labelStyle: TextStyle(color: textColor),
                         ),
                         FilterChip(
-                          label: Text('⚡ Umeme'),
+                          label: const Text('⚡ Umeme'),
                           selected: _electricityIncluded,
                           onSelected: (val) =>
                               setState(() => _electricityIncluded = val),
-                          selectedColor: const Color(
-                            0xFF2E7D32,
-                          ).withValues(alpha: 0.2),
-                          checkmarkColor: const Color(0xFF2E7D32),
+                          selectedColor: primaryColor.withAlpha(51),
+                          backgroundColor: inputFillColor,
+                          checkmarkColor: primaryColor,
+                          labelStyle: TextStyle(color: textColor),
                         ),
                         FilterChip(
-                          label: Text('🌐 Internet'),
+                          label: const Text('🌐 Internet'),
                           selected: _internetIncluded,
                           onSelected: (val) =>
                               setState(() => _internetIncluded = val),
-                          selectedColor: const Color(
-                            0xFF2E7D32,
-                          ).withValues(alpha: 0.2),
-                          checkmarkColor: const Color(0xFF2E7D32),
+                          selectedColor: primaryColor.withAlpha(51),
+                          backgroundColor: inputFillColor,
+                          checkmarkColor: primaryColor,
+                          labelStyle: TextStyle(color: textColor),
                         ),
                       ],
                     ),
-                    SizedBox(height: 12),
-                    TextFormField(
+                    const SizedBox(height: 12),
+                    _buildTextField(
                       controller: _nearbyAmenitiesController,
-                      decoration: InputDecoration(
-                        labelText:
-                            'Vitu vilivyo karibu (Shule, Hospitali, Duka, Stendi)',
-                        prefixIcon: Icon(Icons.place_rounded),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        helperText: 'Taja vitu muhimu vilivyo karibu na nyumba',
-                      ),
-                      maxLines: 2,
+                      label: 'Vitu vilivyo karibu (Shule, Hospitali, Duka)',
+                      icon: Icons.place_rounded,
                     ),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Card(
+              color: cardBgColor,
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -919,15 +1450,10 @@ Mfano wa maelezo:
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF2E7D32),
+                        color: primaryColor,
                       ),
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Jaza taarifa kamili za eneo la nyumba',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     AdvancedLocationPicker(
                       onLocationSelected:
                           (
@@ -948,17 +1474,16 @@ Mfano wa maelezo:
                               _selectedStreet = street;
                               _locationDescriptionController.text = fullAddress;
                             });
-                            debugPrint('📍 Full Address: $fullAddress');
                           },
                     ),
                     if (_selectedRegion.isNotEmpty) ...[
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Container(
-                        padding: EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                          color: primaryColor.withAlpha(26),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF2E7D32)),
+                          border: Border.all(color: primaryColor),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -967,24 +1492,24 @@ Mfano wa maelezo:
                               children: [
                                 Icon(
                                   Icons.check_circle,
-                                  color: const Color(0xFF2E7D32),
+                                  color: primaryColor,
                                   size: 16,
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Text(
                                   'Anwani Kamili:',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: const Color(0xFF2E7D32),
+                                    color: primaryColor,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Text(
                               _locationDescriptionController.text,
-                              style: TextStyle(fontSize: 13),
+                              style: TextStyle(fontSize: 13, color: textColor),
                             ),
                           ],
                         ),
@@ -994,10 +1519,11 @@ Mfano wa maelezo:
                 ),
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Card(
+              color: cardBgColor,
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1006,14 +1532,14 @@ Mfano wa maelezo:
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF2E7D32),
+                        color: primaryColor,
                       ),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Container(
                       height: 250,
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: borderColor),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: _selectedLocation == null
@@ -1024,20 +1550,22 @@ Mfano wa maelezo:
                                   Icon(
                                     Icons.location_searching,
                                     size: 50,
-                                    color: Colors.grey,
+                                    color: subtextColor,
                                   ),
-                                  SizedBox(height: 8),
+                                  const SizedBox(height: 8),
                                   Text(
                                     "Bonyeza kwenye ramani kuchagua eneo",
-                                    style: TextStyle(color: Colors.grey),
+                                    style: TextStyle(color: subtextColor),
                                   ),
-                                  SizedBox(height: 16),
+                                  const SizedBox(height: 16),
                                   FilledButton.icon(
                                     onPressed: _getCurrentLocation,
-                                    icon: Icon(Icons.my_location_rounded),
-                                    label: Text("Tumia Eneo Langu la Sasa"),
+                                    icon: const Icon(Icons.my_location_rounded),
+                                    label: const Text(
+                                      "Tumia Eneo Langu la Sasa",
+                                    ),
                                     style: FilledButton.styleFrom(
-                                      backgroundColor: const Color(0xFF2E7D32),
+                                      backgroundColor: primaryColor,
                                     ),
                                   ),
                                 ],
@@ -1052,7 +1580,7 @@ Mfano wa maelezo:
                                 ),
                                 markers: {
                                   gmap.Marker(
-                                    markerId: gmap.MarkerId("nyumba"),
+                                    markerId: const gmap.MarkerId("nyumba"),
                                     position: _selectedLocation!,
                                     infoWindow: gmap.InfoWindow(
                                       title: "Eneo la Nyumba",
@@ -1066,72 +1594,8 @@ Mfano wa maelezo:
                               ),
                             ),
                     ),
-                    SizedBox(height: 12),
-                    if (_locationAddress.isNotEmpty)
-                      Container(
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF2E7D32)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.location_on_rounded,
-                              color: const Color(0xFF2E7D32),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Koordinati za Ramani:",
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF2E7D32),
-                                    ),
-                                  ),
-                                  Text(
-                                    _locationAddress,
-                                    style: TextStyle(
-                                      color: const Color(0xFF2E7D32),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
-              ),
-            ),
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info, color: Colors.orange.shade700, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      "Muhimu: Hakikisha umejaza maelezo ya nyumba, taarifa zote za bei na eneo (Mkoa hadi Mtaa) na kuchagua eneo kwenye ramani.",
-                      style: TextStyle(
-                        color: Colors.orange.shade700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -1140,9 +1604,6 @@ Mfano wa maelezo:
     );
   }
 
-  // ============================================================
-  // NAVIGATION METHODS
-  // ============================================================
   void _goToNextStep() {
     if (_validateCurrentStep()) {
       if (_currentStep < 3) {
@@ -1165,14 +1626,28 @@ Mfano wa maelezo:
     }
   }
 
-  // ============================================================
-  // VALIDATION METHODS
-  // ============================================================
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0:
         return _formKey.currentState!.validate();
       case 1:
+        if (_useCustomBedrooms && _customBedroomController.text.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Tafadhali weka idadi ya vyumba")),
+          );
+          return false;
+        }
+        if (_useCustomBedrooms) {
+          final customValue = int.tryParse(_customBedroomController.text);
+          if (customValue == null || customValue < 1) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Tafadhali weka idadi sahihi ya vyumba"),
+              ),
+            );
+            return false;
+          }
+        }
         return true;
       case 2:
         if (_selectedImages.length < 3) {
@@ -1183,20 +1658,6 @@ Mfano wa maelezo:
         }
         return true;
       case 3:
-        if (_descriptionController.text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali weka maelezo ya nyumba")),
-          );
-          return false;
-        }
-        if (_descriptionController.text.length < 20) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Maelezo yanapaswa kuwa na angalau herufi 20"),
-            ),
-          );
-          return false;
-        }
         if (_rentPriceController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Tafadhali weka bei ya kukodisha")),
@@ -1241,9 +1702,6 @@ Mfano wa maelezo:
     }
   }
 
-  // ============================================================
-  // IMAGE PICKING METHODS
-  // ============================================================
   Future<void> _pickImages() async {
     try {
       final List<XFile> images = await _picker.pickMultiImage();
@@ -1259,15 +1717,35 @@ Mfano wa maelezo:
     }
   }
 
+  Future<void> _pickVideos() async {
+    try {
+      final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
+      if (video != null) {
+        final sizeInBytes = await video.length();
+        final sizeInMB = sizeInBytes / (1024 * 1024);
+        if (sizeInMB > 50) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Video haipaswi kuzidi MB 50')),
+          );
+          return;
+        }
+        setState(() {
+          _selectedVideos.add(video);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Hitilafu kuchagua video: $e')));
+    }
+  }
+
   void _removeImage(int index) {
     setState(() {
       _selectedImages.removeAt(index);
     });
   }
 
-  // ============================================================
-  // LOCATION METHODS
-  // ============================================================
   Future<void> _getCurrentLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -1299,7 +1777,6 @@ Mfano wa maelezo:
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-
       final location = gmap.LatLng(position.latitude, position.longitude);
       _selectLocation(location);
     } catch (e) {
@@ -1309,7 +1786,7 @@ Mfano wa maelezo:
     }
   }
 
-  void _selectLocation(gmap.LatLng location) async {
+  void _selectLocation(gmap.LatLng location) {
     setState(() {
       _selectedLocation = location;
       _locationAddress =
@@ -1317,114 +1794,278 @@ Mfano wa maelezo:
     });
   }
 
-  // lib/pages/house_registration_page.dart
-
-  // ============================================================
-  // SUBMIT FORM - USING API SERVICE WITH BASE64 IMAGES
-  // ============================================================
   Future<void> _submitForm() async {
-    if (_validateCurrentStep()) {
-      setState(() {
-        _isSubmitting = true;
-        _uploadProgress = 0.0;
-      });
+    if (!_validateCurrentStep()) return;
 
-      // Simulate upload progress UI
-      for (int i = 0; i <= 90; i += 10) {
-        await Future.delayed(const Duration(milliseconds: 120));
-        if (!mounted) return;
-        setState(() {
-          _uploadProgress = i / 100;
-        });
+    // Validation ya token (kama ulivyo nayo)
+    final isValid = await ApiService.isLandlordTokenValid();
+    if (!isValid) {
+      await ApiService.logout();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tafadhali ingia tena kama Mwenye Nyumba.'),
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+        );
       }
-
-      try {
-        // ============================
-        // 🔥 CONVERT IMAGES TO BASE64
-        // ============================
-        List<String> base64Images = [];
-        for (var img in _selectedImages) {
-          final bytes = await img.readAsBytes();
-          final base64 = base64Encode(bytes);
-          base64Images.add(base64);
-        }
-
-        // ============================
-        // 📦 DATA YA KUPELEKA API
-        // ============================
-        final Map<String, dynamic> houseData = {
-          "name": _houseNameController.text,
-          "status": "Inapatikana",
-          "type": _selectedHouseType,
-          "bedrooms": _selectedBedrooms,
-          "description": _descriptionController.text,
-          "firstName": _brandNameController.text,
-          "lastName": _houseNumberController.text,
-          "phone": _phoneController.text,
-          "rentPrice": double.parse(_rentPriceController.text),
-          "location": _locationDescriptionController.text,
-          "images": base64Images, // 🔥 Send Base64 instead of file names
-          "latitude": _selectedLocation?.latitude,
-          "longitude": _selectedLocation?.longitude,
-          "address": _locationAddress,
-          "region": _selectedRegion,
-          "district": _selectedDistrict,
-          "division": _selectedDivision,
-          "ward": _selectedWard,
-          "village": _selectedVillage,
-          "street": _selectedStreet,
-          "depositAmount": _depositController.text.isNotEmpty
-              ? double.parse(_depositController.text)
-              : null,
-          "waterIncluded": _waterIncluded,
-          "electricityIncluded": _electricityIncluded,
-          "internetIncluded": _internetIncluded,
-          "nearbyAmenities": _nearbyAmenitiesController.text,
-        };
-
-        // ============================
-        // USE ApiService
-        // ============================
-        final savedHouse = await ApiService.addHouse(houseData);
-
-        setState(() {
-          _uploadProgress = 1.0;
-        });
-
-        if (savedHouse != null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Nyumba imesajiliwa kikamilifu!"),
-                backgroundColor: Colors.green,
-              ),
-            );
-
-            widget.onHouseAdded(savedHouse);
-
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const RentalHomePage()),
-              (route) => false,
-            );
-          }
-        } else {
-          throw Exception("Failed to save house - server returned null");
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _isSubmitting = false;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Hitilafu API: $e"),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+      return;
     }
+
+    setState(() {
+      _isSubmitting = true;
+      _uploadProgress = 0.0;
+      _uploadedCount = 0;
+      _currentFileStatus = "Inaandaa faili...";
+    });
+
+    try {
+      // KAMA NI EDIT, HATUPAKII MEDIA MPYA ISIPOKUWA ZIMECHAGULIWA
+      final isEditing = widget.existingHouse != null;
+
+      List<String> imageUrls = [];
+      List<String> videoUrls = [];
+
+      if (!isEditing ||
+          _selectedImages.isNotEmpty ||
+          _selectedVideos.isNotEmpty) {
+        // Compress videos
+        _currentFileStatus = "Inabana video...";
+        final List<XFile> compressedVideos = await _compressVideosInParallel();
+
+        _currentFileStatus = "Kuandaa faili za kupakia...";
+        final List<http.MultipartFile> multipartFiles =
+            await _prepareMultipartFiles(compressedVideos);
+        _totalFiles = multipartFiles.length;
+        setState(() => _uploadProgress = 0.1);
+
+        if (multipartFiles.isNotEmpty) {
+          _currentFileStatus = "Kupakia media kwenye Cloudinary...";
+          final uploadedFiles = await _uploadFilesInParallel(multipartFiles);
+          imageUrls = uploadedFiles
+              .where((f) => f['resourceType'] == 'image')
+              .map((f) => f['url'] as String)
+              .toList();
+          videoUrls = uploadedFiles
+              .where((f) => f['resourceType'] == 'video')
+              .map((f) => f['url'] as String)
+              .toList();
+        }
+      }
+
+      // If editing, keep existing media if no new ones added
+      if (isEditing) {
+        if (imageUrls.isEmpty) {
+          imageUrls = widget.existingHouse!.images;
+        }
+        if (videoUrls.isEmpty) {
+          videoUrls = widget.existingHouse!.videos;
+        }
+      }
+
+      setState(() => _uploadProgress = 0.7);
+      _currentFileStatus = isEditing
+          ? "Inahifadhi mabadiliko..."
+          : "Inahifadhi nyumba...";
+
+      final houseData = _buildHouseData(imageUrls, videoUrls);
+
+      dynamic result;
+      if (isEditing) {
+        result = await ApiService.updateHouse(
+          widget.existingHouse!.id,
+          houseData,
+        );
+      } else {
+        result = await ApiService.createHouse(houseData);
+      }
+
+      if (result != null && mounted) {
+        final successMsg = isEditing
+            ? "Nyumba imerekebishwa!"
+            : "Nyumba imesajiliwa!";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $successMsg'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+        if (widget.onHouseAdded != null) {
+          // Re-fetch house data or pass the updated house
+          widget.onHouseAdded!(null);
+        }
+      } else {
+        throw Exception(
+          isEditing ? "Kurekebisha hakukufaulu" : "Kuunda hakukufaulu",
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hitilafu: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<List<XFile>> _compressVideosInParallel() async {
+    if (_selectedVideos.isEmpty) return [];
+    final List<Future<XFile?>> futures = [];
+    for (final video in _selectedVideos) {
+      futures.add(_compressSingleVideo(video));
+    }
+    final results = await Future.wait(futures);
+    return results.whereType<XFile>().toList();
+  }
+
+  Future<XFile?> _compressSingleVideo(XFile video) async {
+    try {
+      final bytes = await video.readAsBytes();
+      final sizeMB = bytes.length / (1024 * 1024);
+      if (sizeMB > 50) throw Exception('Video ${video.name} inazidi MB 50');
+
+      final result = await VideoCompress.compressVideo(
+        video.path,
+        quality: VideoQuality.DefaultQuality,
+        deleteOrigin: false,
+      );
+      if (result != null && result.file != null) {
+        debugPrint(
+          '✅ Compressed: ${video.name} -> ${result.file!.lengthSync() / (1024 * 1024)} MB',
+        );
+        return XFile(result.file!.path);
+      }
+      return video; // fallback
+    } catch (e) {
+      debugPrint('Compression failed for ${video.name}: $e');
+      return video;
+    }
+  }
+
+  Future<List<http.MultipartFile>> _prepareMultipartFiles(
+    List<XFile> compressedVideos,
+  ) async {
+    final List<http.MultipartFile> files = [];
+    // Add images
+    for (final image in _selectedImages) {
+      final bytes = await image.readAsBytes();
+      final mimeType = lookupMimeType(image.path) ?? 'image/jpeg';
+      files.add(
+        http.MultipartFile.fromBytes(
+          'files',
+          bytes,
+          filename: image.name,
+          contentType: MediaType.parse(mimeType),
+        ),
+      );
+    }
+    // Add videos
+    for (final video in compressedVideos) {
+      final bytes = await video.readAsBytes();
+      final mimeType = lookupMimeType(video.path) ?? 'video/mp4';
+      files.add(
+        http.MultipartFile.fromBytes(
+          'files',
+          bytes,
+          filename: video.name,
+          contentType: MediaType.parse(mimeType),
+        ),
+      );
+    }
+    return files;
+  }
+
+  Future<List<Map<String, dynamic>>> _uploadFilesInParallel(
+    List<http.MultipartFile> files,
+  ) async {
+    final List<Future<List<Map<String, dynamic>>>> futures = [];
+    for (int i = 0; i < files.length; i++) {
+      futures.add(_uploadSingleFile(files[i], i));
+    }
+    final allResults = await Future.wait(futures);
+    return allResults.expand((result) => result).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _uploadSingleFile(
+    http.MultipartFile file,
+    int index,
+  ) async {
+    setState(() {
+      _currentFileStatus = "Inapakia faili ${index + 1}/$_totalFiles...";
+    });
+    final url = Uri.parse(
+      '${ApiService.baseUrl}${ApiService.apiPrefix}/houses/upload-media',
+    );
+    final token = await ApiService.getToken();
+    final request = http.MultipartRequest('POST', url);
+    request.headers['Authorization'] = 'Bearer $token';
+    request.files.add(file);
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      setState(() {
+        _uploadedCount++;
+        _uploadProgress = 0.2 + (0.5 * (_uploadedCount / _totalFiles));
+      });
+      return List<Map<String, dynamic>>.from(data['files']);
+    } else {
+      throw Exception('Failed to upload file: ${response.body}');
+    }
+  }
+
+  Map<String, dynamic> _buildHouseData(
+    List<String> imageUrls,
+    List<String> videoUrls,
+  ) {
+    return {
+      "name": _houseNameController.text,
+      "status": "Inapatikana",
+      "type": _selectedHouseType,
+      "bedrooms": _selectedBedrooms,
+      "description": _descriptionController.text,
+      "firstName": _brandNameController.text,
+      "lastName": _houseNumberController.text,
+      "phone": _phoneController.text,
+      "rentPrice": double.parse(_rentPriceController.text),
+      "locationAddress": _locationDescriptionController.text,
+      "latitude": _selectedLocation?.latitude,
+      "longitude": _selectedLocation?.longitude,
+      "region": _selectedRegion,
+      "district": _selectedDistrict,
+      "division": _selectedDivision,
+      "ward": _selectedWard,
+      "village": _selectedVillage,
+      "street": _selectedStreet,
+      "depositAmount": _depositController.text.isNotEmpty
+          ? double.parse(_depositController.text)
+          : null,
+      "waterIncluded": _waterIncluded,
+      "electricityIncluded": _electricityIncluded,
+      "internetIncluded": _internetIncluded,
+      "nearbyAmenities": _nearbyAmenitiesController.text,
+      "hasCeiling": _hasCeiling,
+      "hasAluminium": _hasAluminium,
+      "hasCeilingBoard": _hasCeilingBoard,
+      "hasTiles": _hasTiles,
+      "hasFence": _hasFence,
+      "layoutType": _isSelfContainer ? "self_container" : "shared",
+      "hasPrivateBathroom": _hasPrivateBathroom,
+      "hasPrivateToilet": _hasPrivateToilet,
+      "hasPrivateKitchen": _hasPrivateKitchen,
+      "isSharedBathroom": _isSharedBathroom,
+      "isSharedToilet": _isSharedToilet,
+      "isSharedKitchen": _isSharedKitchen,
+      "imageUrls": imageUrls,
+      "videoUrls": videoUrls,
+    };
   }
 
   @override
@@ -1439,6 +2080,7 @@ Mfano wa maelezo:
     _houseNameController.dispose();
     _nearbyAmenitiesController.dispose();
     _descriptionController.dispose();
+    _customBedroomController.dispose();
     super.dispose();
   }
 }

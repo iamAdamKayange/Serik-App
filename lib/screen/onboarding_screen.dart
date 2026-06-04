@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-//import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:provider/provider.dart';
 import 'package:serkapp/pages/home_page.dart';
+import 'package:serkapp/providers/theme_provider.dart';
 
 class OnboardingScreen extends HookConsumerWidget {
   const OnboardingScreen({super.key});
@@ -11,58 +12,94 @@ class OnboardingScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pageController = usePageController();
     final currentPage = useState(0);
+    final themeProvider = context.read<ThemeProvider>();
+    final isDarkMode = themeProvider.isDarkMode;
 
     final onboardingData = [
       {
         'title': 'Pata Nyumba Bora',
         'description':
-            'Tafuta nyumba za kupanga katika maeneo mbalimbali kwa bei nafuu na mazingira salama',
+            'Tafuta nyumba za kupanga katika maeneo mbalimbali kwa bei nafuu na mazingira salama. Tunakusaidia kupata makazi yako bora.',
         'icon': Icons.search_rounded,
-        'color': Color(0xFF2E7D32),
+        'color': const Color(0xFF2E7D32),
         'image': '🏠',
+        'gradientLight': [const Color(0xFF2E7D32), const Color(0xFF1B5E20)],
+        'gradientDark': [const Color(0xFF1B5E20), const Color(0xFF0D3B0F)],
       },
       {
         'title': 'Wasiliana Moja kwa Moja',
-        'description': 'Wasiliana na wakodisha bila mwingiliano wa mtu wa tatu',
+        'description':
+            'Wasiliana na wakodisha moja kwa moja bila mwingiliano wa mtu wa tatu. Pata majibu ya haraka na maelezo kamili ya nyumba.',
         'icon': Icons.chat_rounded,
-        'color': Color(0xFF1976D2),
+        'color': const Color(0xFF4CAF50),
         'image': '💬',
+        'gradientLight': [const Color(0xFF4CAF50), const Color(0xFF2E7D32)],
+        'gradientDark': [const Color(0xFF2E7D32), const Color(0xFF1B5E20)],
       },
       {
-        'title': 'Malipo Salama',
+        'title': 'Nyumba Salama na Uhakika',
         'description':
-            'Fanya malipo yako kwa usalama na upate hati rasmi ya kukodisha',
+            'Pata nyumba zenye usalama wa kutosha, hati rasmi za kukodisha, na mazingira rafiki kwa maisha yako. Usalama wako ni kipaumbele chetu.',
         'icon': Icons.security_rounded,
-        'color': Color(0xFFF57C00),
+        'color': const Color(0xFF66BB6A),
         'image': '🔒',
+        'gradientLight': [const Color(0xFF43A047), const Color(0xFF2E7D32)],
+        'gradientDark': [const Color(0xFF1B5E20), const Color(0xFF0D3B0F)],
       },
     ];
 
+    // Dynamic colors based on theme
+    final primaryColor = isDarkMode
+        ? const Color(0xFF4CAF50)
+        : const Color(0xFF2E7D32);
+    final backgroundColor = isDarkMode ? const Color(0xFF121212) : Colors.white;
+    final subtextColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
+    final indicatorColor = isDarkMode ? Colors.grey[700]! : Colors.grey[300]!;
+    final buttonBgColor = isDarkMode
+        ? primaryColor.withOpacity(0.2)
+        : primaryColor.withOpacity(0.1);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // Skip Button
-            Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => HomePage()),
-                    );
-                  },
-                  child: Text(
-                    'Pita',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.blue,
-                      fontWeight: FontWeight.w600,
+            // Top Bar with Skip
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // Skip Button
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HomePage(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      backgroundColor: buttonBgColor,
+                    ),
+                    child: Text(
+                      'Pita',
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
 
@@ -75,35 +112,51 @@ class OnboardingScreen extends HookConsumerWidget {
                 onPageChanged: (page) => currentPage.value = page,
                 itemBuilder: (context, index) {
                   final item = onboardingData[index];
+                  final gradientColors = isDarkMode
+                      ? (item['gradientDark'] as List<Color>)
+                      : (item['gradientLight'] as List<Color>);
+
                   return Padding(
-                    padding: const EdgeInsets.all(32.0),
+                    padding: const EdgeInsets.all(24.0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Emoji/Image Placeholder
-                        Container(
-                          width: 150,
-                          height: 150,
-                          decoration: BoxDecoration(
-                            color: (item['color'] as Color).withValues(
-                              alpha: 0.1,
-                            ),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: (item['color'] as Color).withValues(
-                                alpha: 0.3,
+                        // Animated Icon Container
+                        TweenAnimationBuilder(
+                          tween: Tween<double>(begin: 0, end: 1),
+                          duration: Duration(milliseconds: 600 + (index * 100)),
+                          builder: (context, double value, child) {
+                            return Transform.scale(
+                              scale: value,
+                              child: Container(
+                                width: 180,
+                                height: 180,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: gradientColors,
+                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: primaryColor.withOpacity(0.3),
+                                      blurRadius: 30,
+                                      offset: const Offset(0, 15),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    item['image'] as String,
+                                    style: const TextStyle(fontSize: 70),
+                                  ),
+                                ),
                               ),
-                              width: 2,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              item['image'] as String,
-                              style: TextStyle(fontSize: 60),
-                            ),
-                          ),
+                            );
+                          },
                         ),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 48),
 
                         // Title
                         Text(
@@ -111,19 +164,19 @@ class OnboardingScreen extends HookConsumerWidget {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w700,
-                            color: Colors.blue,
+                            color: primaryColor,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
 
                         // Description
                         Text(
                           item['description'] as String,
                           style: TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                            color: Colors.grey[700],
+                            fontSize: 15,
+                            height: 1.6,
+                            color: subtextColor,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -144,15 +197,15 @@ class OnboardingScreen extends HookConsumerWidget {
                     children: List.generate(
                       onboardingData.length,
                       (index) => AnimatedContainer(
-                        duration: Duration(milliseconds: 300),
-                        width: currentPage.value == index ? 24 : 8,
+                        duration: const Duration(milliseconds: 300),
+                        width: currentPage.value == index ? 32 : 8,
                         height: 8,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        margin: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(4),
                           color: currentPage.value == index
-                              ? Colors.blue
-                              : Colors.grey.shade300,
+                              ? primaryColor
+                              : indicatorColor,
                         ),
                       ),
                     ),
@@ -166,50 +219,64 @@ class OnboardingScreen extends HookConsumerWidget {
                       children: [
                         // Back Button
                         if (currentPage.value > 0)
-                          TextButton(
-                            onPressed: () {
-                              pageController.previousPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              );
-                            },
-                            child: Text(
-                              'Rudi',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w600,
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                pageController.previousPage(
+                                  duration: const Duration(milliseconds: 400),
+                                  curve: Curves.easeInOutCubic,
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: primaryColor,
+                                side: BorderSide(
+                                  color: primaryColor,
+                                  width: 1.5,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                'Rudi',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
-                        const Spacer(),
+
+                        if (currentPage.value > 0) const SizedBox(width: 12),
 
                         // Next/Get Started Button
-                        Container(
-                          decoration: BoxDecoration(color: Colors.white),
-                          width: 150,
-                          height: 50,
+                        Expanded(
                           child: FilledButton(
                             onPressed: () {
                               if (currentPage.value <
                                   onboardingData.length - 1) {
                                 pageController.nextPage(
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
+                                  duration: const Duration(milliseconds: 400),
+                                  curve: Curves.easeInOutCubic,
                                 );
                               } else {
-                                Navigator.push(
+                                Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => HomePage(),
+                                    builder: (context) => const HomePage(),
                                   ),
                                 );
                               }
                             },
                             style: FilledButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: primaryColor,
                               foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               elevation: 2,
                             ),
@@ -217,7 +284,7 @@ class OnboardingScreen extends HookConsumerWidget {
                               currentPage.value < onboardingData.length - 1
                                   ? 'Endelea'
                                   : 'Anza Sasa',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -227,6 +294,8 @@ class OnboardingScreen extends HookConsumerWidget {
                       ],
                     ),
                   ),
+
+                  const SizedBox(height: 16),
                 ],
               ),
             ),

@@ -1,25 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/model/theme_model.dart';
+import 'package:serkapp/providers/theme_provider.dart';
 import 'package:serkapp/screen/splash_screen.dart';
 import 'package:serkapp/services/csv_location_service.dart';
-import 'package:serkapp/theme/dark_mode.dart';
-import 'package:serkapp/theme/light_mode.dart';
+import 'package:serkapp/providers/auth_provider.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Ongeza try-catch kwa error handling
   try {
-    debugPrint('🟢 Loading location data...');
+    debugPrint('Loading location data...');
     await CsvLocationService.loadAllLocations();
-    debugPrint('✅ Location data loaded successfully!');
-    CsvLocationService.printLoadedRegions(); // Debug: show loaded regions
+    debugPrint('Location data loaded successfully!');
+    CsvLocationService.printLoadedRegions();
   } catch (e) {
-    debugPrint('❌ Error loading location data: $e');
+    debugPrint('Error loading location data: $e');
   }
 
-  runApp(ChangeNotifierProvider(create: (_) => ThemeModel(), child: MyApp()));
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -27,14 +33,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeModel>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      darkTheme: darkMode,
+      title: 'SERIK App',
+      theme: themeProvider.lightTheme,
+      darkTheme: themeProvider.darkTheme,
       themeMode: themeProvider.themeMode,
-      title: 'Ramani Mwenye Nyumba',
-      theme: lightMode,
-      home: SplashScreen(),
+      home: const SplashScreen(),
     );
   }
 }
