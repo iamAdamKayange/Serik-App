@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 
 class CustomDialogs {
   static void showSuccess(BuildContext context, String message) {
@@ -55,14 +56,14 @@ class CustomDialogs {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(isDarkMode ? 0.2 : 0.1),
+                color: primaryColor.withValues(alpha: isDarkMode ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.account_circle, size: 28, color: primaryColor),
             ),
             const SizedBox(width: 12),
             Text(
-              "Profile Yako",
+              context.tr('Profile Yako', en: 'Your Profile'),
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
@@ -77,26 +78,26 @@ class CustomDialogs {
           children: [
             _buildProfileRow(
               Icons.person_outline,
-              "Jina",
-              "Mpangishaji Pro",
+              context.tr('Jina', en: 'Name'),
+              context.tr('Mpangishaji Pro', en: 'Landlord Pro'),
               isDarkMode: isDarkMode,
             ),
             _buildProfileRow(
               Icons.email_outlined,
-              "Barua Pepe",
+              context.tr('Barua Pepe', en: 'Email'),
               "mpangishaji@serkapp.com",
               isDarkMode: isDarkMode,
             ),
             _buildProfileRow(
               Icons.phone_outlined,
-              "Simu",
+              context.tr('Simu', en: 'Phone'),
               "+255 123 456 789",
               isDarkMode: isDarkMode,
             ),
             _buildProfileRow(
               Icons.home_work_outlined,
-              "Nyumba Zako",
-              "$houseCount nyumba",
+              context.tr('Nyumba Zako', en: 'Your Houses'),
+              context.tr('$houseCount nyumba', en: '$houseCount houses'),
               isDarkMode: isDarkMode,
             ),
           ],
@@ -104,7 +105,10 @@ class CustomDialogs {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("Funga", style: GoogleFonts.poppins(color: labelColor)),
+            child: Text(
+              context.tr('Funga', en: 'Close'),
+              style: GoogleFonts.poppins(color: labelColor),
+            ),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -160,7 +164,7 @@ class CustomDialogs {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(isDarkMode ? 0.2 : 0.1),
+                color: primaryColor.withValues(alpha: isDarkMode ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.person, size: 24, color: primaryColor),
@@ -183,35 +187,40 @@ class CustomDialogs {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDetailRow(Icons.phone, "Simu", phone, isDarkMode: isDarkMode),
+            _buildDetailRow(
+              Icons.phone,
+              context.tr('Simu', en: 'Phone'),
+              phone,
+              isDarkMode: isDarkMode,
+            ),
             _buildDetailRow(
               Icons.home,
-              "Nyumba",
+              context.tr('Nyumba', en: 'House'),
               houseName,
               isDarkMode: isDarkMode,
             ),
             _buildDetailRow(
               Icons.attach_money,
-              "Kodi",
+              context.tr('Kodi', en: 'Rent'),
               "TZS ${NumberFormat('#,###').format(rentAmount)}",
               isDarkMode: isDarkMode,
             ),
             _buildDetailRow(
               Icons.calendar_today,
-              "Kuanzia",
+              context.tr('Kuanzia', en: 'From'),
               DateFormat('dd/MM/yyyy').format(startDate),
               isDarkMode: isDarkMode,
             ),
             if (endDate != null)
               _buildDetailRow(
                 Icons.event,
-                "Mwisho",
+                context.tr('Mwisho', en: 'End'),
                 DateFormat('dd/MM/yyyy').format(endDate),
                 isDarkMode: isDarkMode,
               ),
             _buildDetailRow(
               Icons.badge,
-              "Hali",
+              context.tr('Hali', en: 'Status'),
               status,
               isDarkMode: isDarkMode,
             ),
@@ -221,7 +230,7 @@ class CustomDialogs {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              "Funga",
+              context.tr('Funga', en: 'Close'),
               style: GoogleFonts.poppins(color: primaryColor),
             ),
           ),

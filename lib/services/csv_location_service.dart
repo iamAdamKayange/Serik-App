@@ -15,7 +15,7 @@ class CsvLocationService {
     // Orodha ya mikoa yote kutoka kwenye CSV files zako
     final List<String> regionFiles = [
       'arusha',
-      'dar_es_salaam',
+      'dar-es-salaam',
       'dodoma',
       'geita',
       'iringa',

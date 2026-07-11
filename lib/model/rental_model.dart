@@ -52,10 +52,16 @@ class RentalSpot {
   final int? numberOfSharedUnits;
 
   final List<String> images;
-  final List<String> videos; // 🆕
-  final List<String> videoThumbnails; // 🆕
+  final List<String> videos;
+  final List<String> videoThumbnails;
 
   final DateTime dateAdded;
+
+  String get brandName => firstName;
+  String get ownerName => name;
+  String get houseNumber => lastName;
+
+  // ==================== CONSTRUCTORS ====================
 
   RentalSpot({
     required this.id,
@@ -103,6 +109,65 @@ class RentalSpot {
     this.numberOfSharedUnits,
   }) : formattedPrice = _formatPrice(rentPrice);
 
+  // ✅ CONSTRUCTOR KWA VIDEO FEED
+  RentalSpot.forVideoFeed({
+    required String id,
+    required String brandName,
+    required double rentPrice,
+    required String location,
+    required String region,
+    required String district,
+    required String ward,
+    required String street,
+    double? latitude,
+    double? longitude,
+    List<String>? videos,
+    List<String>? videoThumbnails,
+  }) : id = id,
+       firstName = brandName,
+       name = brandName,
+       status = 'Inapatikana',
+       type = 'Nyumba ya Kawaida',
+       bedrooms = 0,
+       description = '',
+       lastName = '',
+       phone = '',
+       altPhone = null,
+       rentPrice = rentPrice,
+       location = location,
+       images = [],
+       videos = videos ?? [],
+       videoThumbnails = videoThumbnails ?? [],
+       dateAdded = DateTime.now(),
+       depositAmount = null,
+       waterIncluded = false,
+       electricityIncluded = false,
+       internetIncluded = false,
+       nearbyAmenities = null,
+       latitude = latitude ?? 0.0,
+       longitude = longitude ?? 0.0,
+       address = location,
+       region = region,
+       district = district,
+       division = '',
+       ward = ward,
+       village = '',
+       street = street,
+       hasCeiling = false,
+       hasAluminium = false,
+       hasCeilingBoard = false,
+       hasTiles = false,
+       hasFence = false,
+       layoutType = house.HouseLayoutType.selfContainer,
+       hasPrivateBathroom = true,
+       hasPrivateToilet = true,
+       hasPrivateKitchen = true,
+       isSharedBathroom = false,
+       isSharedToilet = false,
+       isSharedKitchen = false,
+       numberOfSharedUnits = null,
+       formattedPrice = _formatPrice(rentPrice);
+
   static String _formatPrice(double price) {
     final formatter = NumberFormat.currency(
       locale: 'sw_TZ',
@@ -112,7 +177,8 @@ class RentalSpot {
     return formatter.format(price);
   }
 
-  // 🆕 Factory from HouseData (updated for videos)
+  // ==================== FACTORIES ====================
+
   factory RentalSpot.fromHouseData(HouseData house) {
     return RentalSpot(
       id: house.id,
@@ -161,7 +227,51 @@ class RentalSpot {
     );
   }
 
-  // --- Helper methods (unchanged except where videos are accessed) ---
+  /// ✅ Factory kutoka JSON ya video feed - SAFE PARSING
+  factory RentalSpot.fromVideoFeedJson(Map<String, dynamic> json) {
+    // Safe parser for price (handles String or num)
+    double parsePrice(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) {
+        final cleaned = value.replaceAll(RegExp(r'[^0-9.]'), '');
+        return double.tryParse(cleaned) ?? 0.0;
+      }
+      return 0.0;
+    }
+
+    // Safe parser for lat/lng (handles String or num)
+    double parseLatLng(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) {
+        final cleaned = value.replaceAll(RegExp(r'[^0-9.-]'), '');
+        return double.tryParse(cleaned) ?? 0.0;
+      }
+      return 0.0;
+    }
+
+    return RentalSpot.forVideoFeed(
+      id: json['id']?.toString() ?? '',
+      brandName: json['brand_name'] ?? json['firstName'] ?? 'Nyumba',
+      rentPrice: parsePrice(json['rent_price'] ?? json['rentPrice']),
+      location: json['location_address'] ?? json['location'] ?? '',
+      region: json['region'] ?? '',
+      district: json['district'] ?? '',
+      ward: json['ward'] ?? '',
+      street: json['street'] ?? '',
+      latitude: parseLatLng(json['latitude']),
+      longitude: parseLatLng(json['longitude']),
+      videos: (json['videos'] as List?)?.cast<String>() ?? [],
+      videoThumbnails:
+          (json['video_thumbnails'] as List?)?.cast<String>() ?? [],
+    );
+  }
+
+  // ==================== HELPER METHODS ====================
+
   String getFullSwahiliAddress() {
     List<String> parts = [];
     if (street.isNotEmpty) parts.add("Mtaa: $street");
@@ -180,15 +290,13 @@ class RentalSpot {
   String getShortAddress() {
     if (street.isNotEmpty && ward.isNotEmpty) {
       return "$street, $ward";
-    } else if (ward.isNotEmpty && district.isNotEmpty)
-      // ignore: curly_braces_in_flow_control_structures
+    } else if (ward.isNotEmpty && district.isNotEmpty) {
       return "$ward, $district";
-    else if (district.isNotEmpty)
-      // ignore: curly_braces_in_flow_control_structures
+    } else if (district.isNotEmpty) {
       return district;
-    else if (address.isNotEmpty)
-      // ignore: curly_braces_in_flow_control_structures
+    } else if (address.isNotEmpty) {
       return address;
+    }
     return location;
   }
 
@@ -265,6 +373,7 @@ class RentalSpot {
   bool get isSelfContainer =>
       layoutType == house.HouseLayoutType.selfContainer ||
       (hasPrivateBathroom && hasPrivateToilet && hasPrivateKitchen);
+
   bool get isSharedFacility =>
       layoutType == house.HouseLayoutType.shared ||
       isSharedBathroom ||
@@ -293,19 +402,19 @@ class RentalSpot {
     List<String> facilities = [];
     if (hasPrivateBathroom) {
       facilities.add('Bafu private');
-    } else if (isSharedBathroom)
-      // ignore: curly_braces_in_flow_control_structures
+    } else if (isSharedBathroom) {
       facilities.add('Bafu shared');
+    }
     if (hasPrivateToilet) {
       facilities.add('Choo private');
-    } else if (isSharedToilet)
-      // ignore: curly_braces_in_flow_control_structures
+    } else if (isSharedToilet) {
       facilities.add('Choo shared');
+    }
     if (hasPrivateKitchen) {
       facilities.add('Jikoni private');
-    } else if (isSharedKitchen)
-      // ignore: curly_braces_in_flow_control_structures
+    } else if (isSharedKitchen) {
       facilities.add('Jikoni shared');
+    }
     return facilities.isEmpty
         ? 'Taarifa za vifaa hazijabainishwa'
         : facilities.join(', ');
@@ -318,8 +427,10 @@ class RentalSpot {
       district.isNotEmpty &&
       ward.isNotEmpty &&
       street.isNotEmpty;
+
   String getMapUrl() =>
       'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
+
   String getDirectionsUrl() =>
       'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude';
 
@@ -327,19 +438,20 @@ class RentalSpot {
     String featuresText = getAllHouseFeatures().isNotEmpty
         ? "\n✨ *Vipengele:* ${getAllHouseFeatures().join(", ")}"
         : "";
-    return "🏠 *${name.toUpperCase()}*\n\n"
+    return "🏠 *${brandName.toUpperCase()}*\n"
+        "🔢 *Namba ya Nyumba:* ${houseNumber.isNotEmpty ? houseNumber : "Hajabainishwa"}\n"
         "📍 *Anwani:* ${getFormattedAddress()}\n"
         "💰 *Bei:* $formattedPrice kwa mwezi\n"
         "🛏️ *Vyumba vya kulala:* $bedrooms\n"
         "🏷️ *Aina:* $type\n"
         "📋 *Hali:* $status\n"
         "$featuresText\n"
-        "\n📞 *Mawasiliano:* $phone\n"
+        "\n📞 *Mwenye Nyumba:* $ownerName\n"
+        "📞 *Simu:* $phone\n"
         "\n🔗 Tazama nyumba hii kwenye App yetu!";
   }
 
-  String getFullOwnerName() =>
-      lastName.isNotEmpty ? "$firstName $lastName" : firstName;
+  String getFullOwnerName() => ownerName;
   String getShortDescription() => description.length > 100
       ? "${description.substring(0, 100)}..."
       : description;
@@ -347,6 +459,7 @@ class RentalSpot {
   String? getFirstImage() => images.isNotEmpty ? images.first : null;
   bool get hasAnyUtility =>
       waterIncluded || electricityIncluded || internetIncluded;
+
   String get formattedUtilities {
     List<String> utils = [];
     if (waterIncluded) utils.add("Maji");
@@ -449,5 +562,5 @@ class RentalSpot {
 
   @override
   String toString() =>
-      'RentalSpot(name: $name, price: $formattedPrice, location: ${getShortAddress()})';
+      'RentalSpot(brandName: $brandName, price: $formattedPrice, location: ${getShortAddress()})';
 }

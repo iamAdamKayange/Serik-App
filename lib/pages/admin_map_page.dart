@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/model/house_data.dart';
 import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/pages/house_registration_page.dart';
@@ -25,8 +26,10 @@ class _AdminMapPageState extends State<AdminMapPage> {
   final Completer<GoogleMapController> _controller = Completer();
   LatLng _currentPosition = const LatLng(-6.7924, 39.2083);
   final Set<Marker> _myHousesMarkers = {};
+  final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
   List<HouseData> _myHouses = [];
+  String _searchQuery = '';
 
   int _totalHouses = 0;
   int _availableHouses = 0;
@@ -72,7 +75,6 @@ class _AdminMapPageState extends State<AdminMapPage> {
       debugPrint('📍 Loading houses for landlord from backend...');
       final allUserHouses = await ApiService.getMyHouses();
 
-      // Convert JSON to HouseData objects
       final List<HouseData> houses = allUserHouses
           .map((json) => HouseData.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -102,8 +104,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
   }
 
   Future<void> _zoomToNewHouse(HouseData house) async {
-    if (house.latitude == null || house.longitude == null) return;
-
+    if (!house.hasValidLocation()) return;
     final controller = await _controller.future;
     controller.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -113,13 +114,12 @@ class _AdminMapPageState extends State<AdminMapPage> {
         ),
       ),
     );
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("✅ Nyumba yako imesajiliwa kikamilifu!"),
+        const SnackBar(
+          content: Text("✅ Nyumba yako imesajiliwa kikamilifu!"),
           backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
+          duration: Duration(seconds: 3),
         ),
       );
     }
@@ -127,9 +127,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
 
   Future<void> _loadMarkers() async {
     final Set<Marker> loadedMarkers = {};
-
-    for (var i = 0; i < _myHouses.length; i++) {
-      final house = _myHouses[i];
+    for (var house in _filteredHouses()) {
       if (house.hasValidLocation()) {
         final Uint8List icon = await _createAdminMarkerBitmap(
           house.rentPrice.toInt(),
@@ -147,7 +145,6 @@ class _AdminMapPageState extends State<AdminMapPage> {
         loadedMarkers.add(marker);
       }
     }
-
     if (mounted) {
       setState(() {
         _myHousesMarkers.clear();
@@ -157,6 +154,50 @@ class _AdminMapPageState extends State<AdminMapPage> {
     }
   }
 
+  List<HouseData> _filteredHouses() {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _myHouses;
+
+    return _myHouses.where((house) {
+      final searchableText = [
+        house.name,
+        house.firstName,
+        house.lastName,
+        house.phone,
+        house.status,
+        house.type,
+        house.description,
+        house.location,
+        house.address,
+        house.region,
+        house.district,
+        house.division,
+        house.ward,
+        house.village,
+        house.street,
+        house.nearbyAmenities,
+        house.formattedPrice,
+        house.rentPrice.toStringAsFixed(0),
+      ].join(' ').toLowerCase();
+
+      return searchableText.contains(query);
+    }).toList();
+  }
+
+  void _searchMyHouses(String query) {
+    setState(() => _searchQuery = query);
+    _loadMarkers();
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchQuery = '';
+      _searchController.clear();
+    });
+    _loadMarkers();
+  }
+
+  // ---------- Marker drawing (same as before but using updated fields) ----------
   Future<Uint8List> _createAdminMarkerBitmap(
     int price,
     String type,
@@ -164,111 +205,81 @@ class _AdminMapPageState extends State<AdminMapPage> {
   ) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
-
     final Color markerColor = _getMarkerColor(type);
     final bool isAvailable = status == "Inapatikana";
-
-    const double width = 60;
-    const double height = 28;
+    const double width = 58;
+    const double height = 72;
+    const Offset center = Offset(width / 2, 24);
 
     final Paint shadowPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.25)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0.5, 0.5, width, height),
-        const Radius.circular(6),
-      ),
-      shadowPaint,
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    Path pinPath({double dx = 0, double dy = 0}) {
+      return Path()
+        ..moveTo(width / 2 + dx, 68 + dy)
+        ..cubicTo(45 + dx, 52 + dy, 54 + dx, 41 + dy, 54 + dx, 25 + dy)
+        ..cubicTo(54 + dx, 10 + dy, 43 + dx, 1 + dy, 29 + dx, 1 + dy)
+        ..cubicTo(15 + dx, 1 + dy, 4 + dx, 10 + dy, 4 + dx, 25 + dy)
+        ..cubicTo(
+          4 + dx,
+          41 + dy,
+          13 + dx,
+          52 + dy,
+          width / 2 + dx,
+          68 + dy,
+        )
+        ..close();
+    }
+
+    canvas.drawPath(pinPath(dx: 1.5, dy: 2.5), shadowPaint);
+    canvas.drawPath(pinPath(), Paint()..color = markerColor);
+    canvas.drawPath(
+      pinPath(),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.28)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
     );
 
-    final Paint bgPaint = Paint()..color = markerColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, width, height),
-        const Radius.circular(6),
-      ),
-      bgPaint,
+    canvas.drawCircle(center, 10.5, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 6.5, Paint()..color = markerColor);
+    canvas.drawCircle(
+      const Offset(22, 15),
+      4.5,
+      Paint()..color = Colors.white.withValues(alpha: 0.45),
     );
-
-    final Paint borderPaint = Paint()
-      ..color = markerColor.withValues(alpha: 0.9)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, width, height),
-        const Radius.circular(6),
-      ),
-      borderPaint,
-    );
-
-    final Paint circlePaint = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(14, height / 2), 8, circlePaint);
-
-    final Paint innerPaint = Paint()..color = markerColor;
-    canvas.drawCircle(Offset(14, height / 2), 5.5, innerPaint);
-
-    final Paint shinePaint = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(12, height / 2 - 1.5), 1.5, shinePaint);
 
     final Paint statusPaint = Paint()
       ..color = isAvailable ? Colors.green : Colors.orange;
-    canvas.drawCircle(Offset(20, 5), 3, statusPaint);
+    canvas.drawCircle(const Offset(43, 13), 5, statusPaint);
+    canvas.drawCircle(
+      const Offset(43, 13),
+      5,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
 
     final pricePainter = TextPainter(
       textDirection: ui.TextDirection.ltr,
-      textAlign: TextAlign.left,
+      textAlign: TextAlign.center,
     );
     pricePainter.text = TextSpan(
       text: _abbreviatePrice(price),
       style: const TextStyle(
-        fontSize: 9.5,
+        fontSize: 9.0,
         color: Colors.white,
         fontWeight: FontWeight.w800,
       ),
     );
-    pricePainter.layout(minWidth: 0, maxWidth: width - 28);
-    pricePainter.paint(canvas, Offset(26, 7));
+    pricePainter.layout(minWidth: 0, maxWidth: width - 10);
+    pricePainter.paint(canvas, Offset((width - pricePainter.width) / 2, 42));
 
-    String tagText = _getShortTag(type);
-    final Paint tagBgPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.25);
-    double tagWidth = 18.0;
-    double tagHeight = 11.0;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(26, 16, tagWidth, tagHeight),
-        const Radius.circular(3),
-      ),
-      tagBgPaint,
-    );
-
-    final tagPainter = TextPainter(
-      textDirection: ui.TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-    tagPainter.text = TextSpan(
-      text: tagText,
-      style: const TextStyle(
-        fontSize: 6.5,
-        color: Colors.white,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-    tagPainter.layout(minWidth: 0, maxWidth: tagWidth);
-    tagPainter.paint(
-      canvas,
-      Offset(
-        26 + (tagWidth - tagPainter.width) / 2,
-        16 + (tagHeight - tagPainter.height) / 2,
-      ),
-    );
-
-    final Paint starPaint = Paint()..color = const Color(0xFFFFD700);
+    /*
+      final Paint starPaint = Paint()..color = const Color(0xFFFFD700);
     canvas.drawCircle(Offset(50, 8), 4, starPaint);
-
     final starPainter = TextPainter(
       textDirection: ui.TextDirection.ltr,
       textAlign: TextAlign.center,
@@ -283,19 +294,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
       Offset(50 - starPainter.width / 2, 8 - starPainter.height / 2),
     );
 
-    final Paint pinPaint = Paint()..color = markerColor;
-    final Path pinPath = Path();
-    double pinX = width / 2;
-    double pinY = height - 1;
-    pinPath.moveTo(pinX - 4, pinY);
-    pinPath.lineTo(pinX, pinY + 6);
-    pinPath.lineTo(pinX + 4, pinY);
-    pinPath.close();
-    canvas.drawPath(pinPath, pinPaint);
-
-    final Paint pinHighlight = Paint()
-      ..color = Colors.white.withValues(alpha: 0.4);
-    canvas.drawCircle(Offset(pinX, pinY + 2), 1, pinHighlight);
+    */
 
     final img = await pictureRecorder.endRecording().toImage(
       width.toInt(),
@@ -309,27 +308,6 @@ class _AdminMapPageState extends State<AdminMapPage> {
     if (price >= 1000000) return '${(price / 1000000).toStringAsFixed(1)}M';
     if (price >= 1000) return '${(price / 1000).toStringAsFixed(0)}K';
     return price.toString();
-  }
-
-  String _getShortTag(String type) {
-    switch (type.toLowerCase()) {
-      case 'apartment':
-        return 'Pipa';
-      case 'nyumba ya kawaida':
-        return 'Majl';
-      case 'studio':
-        return 'Stu';
-      case 'mansion':
-        return 'Mans';
-      case 'hostel':
-        return 'Host';
-      case 'ghorofa':
-        return 'Ghor';
-      case 'biashara':
-        return 'Bia';
-      default:
-        return 'Nyum';
-    }
   }
 
   Color _getMarkerColor(String type) {
@@ -353,6 +331,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
     }
   }
 
+  // ---------- Bottom sheet with real data and edit button ----------
   void _showHouseBottomSheet(HouseData house) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final isDarkMode = themeProvider.isDarkMode;
@@ -465,8 +444,9 @@ class _AdminMapPageState extends State<AdminMapPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
+                      // Show brand name (jina maarufu) as main title
                       Text(
-                        house.name,
+                        house.firstName,
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -474,6 +454,18 @@ class _AdminMapPageState extends State<AdminMapPage> {
                         ),
                       ),
                       const SizedBox(height: 8),
+                      // Show house number if exists
+                      if (house.lastName.isNotEmpty)
+                        Text(
+                          "Namba ya Nyumba: ${house.lastName}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDarkMode
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(
@@ -547,7 +539,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Video section (if any)
+                      // Video section
                       if (house.videos.isNotEmpty) ...[
                         Text(
                           'Video za Nyumba:',
@@ -591,7 +583,9 @@ class _AdminMapPageState extends State<AdminMapPage> {
                                       Icon(
                                         Icons.play_circle_filled,
                                         size: 50,
-                                        color: Colors.white.withOpacity(0.9),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.9,
+                                        ),
                                       ),
                                       Positioned(
                                         bottom: 8,
@@ -634,10 +628,12 @@ class _AdminMapPageState extends State<AdminMapPage> {
                             house.type,
                             _getMarkerColor(house.type),
                           ),
-                          _buildDetailChip(
-                            "Deposit: TZS ${NumberFormat('#,###').format(house.depositAmount ?? 0)}",
-                            Colors.grey,
-                          ),
+                          if (house.depositAmount != null &&
+                              house.depositAmount! > 0)
+                            _buildDetailChip(
+                              "Deposit: TZS ${NumberFormat('#,###').format(house.depositAmount)}",
+                              Colors.grey,
+                            ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -672,7 +668,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
                                 _editHouse(house);
                               },
                               icon: const Icon(Icons.edit_rounded),
-                              label: const Text('Hariri'),
+                              label: Text(context.tr('Hariri', en: 'Edit')),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: primaryColor,
                                 side: BorderSide(color: primaryColor),
@@ -690,7 +686,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
                                 _addNewHouse();
                               },
                               icon: const Icon(Icons.add_rounded),
-                              label: const Text('Sajili Nyingine'),
+                              label: Text(context.tr('Sajili Nyingine', en: 'Register Another')),
                               style: FilledButton.styleFrom(
                                 backgroundColor: primaryColor,
                                 shape: RoundedRectangleBorder(
@@ -717,8 +713,9 @@ class _AdminMapPageState extends State<AdminMapPage> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Haikuweza kufungua video.')),
+        SnackBar(content: Text(context.tr('Haikuweza kufungua video.', en: 'Could not open video.'))),
       );
     }
   }
@@ -764,10 +761,20 @@ class _AdminMapPageState extends State<AdminMapPage> {
     );
   }
 
-  void _editHouse(HouseData house) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Feature ya kuhariri inaundwa...")),
+  // ---------- Edit functionality - pass existing house to form ----------
+  void _editHouse(HouseData house) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HouseRegistrationForm(
+          existingHouse: house,
+          onHouseAdded: (updatedHouse) {
+            _loadMyHouses(); // refresh after edit
+          },
+        ),
+      ),
     );
+    if (result == true) _loadMyHouses();
   }
 
   void _showError(String message) {
@@ -780,6 +787,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
     );
   }
 
+  // ---------- UI Build ----------
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -810,7 +818,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
           Container(
             margin: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
@@ -843,7 +851,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
             onMapCreated: (GoogleMapController controller) =>
                 _controller.complete(controller),
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 140,
+              top: MediaQuery.of(context).padding.top + 210,
               bottom: 20,
             ),
             style: isDarkMode ? _getDarkMapStyle() : null,
@@ -854,6 +862,77 @@ class _AdminMapPageState extends State<AdminMapPage> {
             right: 16,
             child: _buildStatsHeader(isDarkMode, primaryColor, surfaceColor),
           ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 126,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    color: isDarkMode ? Colors.white70 : Colors.grey[600],
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        hintText: context.tr('Tafuta nyumba yako, eneo, bei...', en: 'Search your house, area, price...'),
+                        border: InputBorder.none,
+                        hintStyle: TextStyle(
+                          color: isDarkMode ? Colors.grey[500] : Colors.grey,
+                        ),
+                      ),
+                      onChanged: _searchMyHouses,
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty)
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: primaryColor),
+                      onPressed: _clearSearch,
+                      tooltip: context.tr('Futa utafutaji', en: 'Clear search'),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (!_isLoading && _myHouses.isNotEmpty)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 192,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_myHousesMarkers.length} / ${_myHouses.length} nyumba',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             bottom: 100,
             right: 16,
@@ -934,7 +1013,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
                       FilledButton.icon(
                         onPressed: _addNewHouse,
                         icon: const Icon(Icons.add_rounded),
-                        label: const Text("Sajili Nyumba Mpya"),
+                        label: Text(context.tr('Sajili Nyumba Mpya', en: 'Register New House')),
                         style: FilledButton.styleFrom(
                           backgroundColor: primaryColor,
                           shape: RoundedRectangleBorder(
@@ -962,8 +1041,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
     );
   }
 
-  String _getDarkMapStyle() {
-    return '''
+  String _getDarkMapStyle() => '''
     [
       {"elementType": "geometry", "stylers": [{"color": "#242f3e"}]},
       {"elementType": "labels.text.fill", "stylers": [{"color": "#746855"}]},
@@ -984,8 +1062,7 @@ class _AdminMapPageState extends State<AdminMapPage> {
       {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#515c6d"}]},
       {"featureType": "water", "elementType": "labels.text.stroke", "stylers": [{"color": "#17263c"}]}
     ]
-    ''';
-  }
+  ''';
 
   Widget _buildStatsHeader(
     bool isDarkMode,
@@ -1156,4 +1233,12 @@ class _AdminMapPageState extends State<AdminMapPage> {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 }
+
+

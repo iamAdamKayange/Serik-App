@@ -131,8 +131,8 @@ class PaymentsPage extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: isPaid
-                    ? Colors.green.withOpacity(isDark ? 0.2 : 0.1)
-                    : Colors.orange.withOpacity(isDark ? 0.2 : 0.1),
+                    ? Colors.green.withValues(alpha: isDark ? 0.2 : 0.1)
+                    : Colors.orange.withValues(alpha: isDark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

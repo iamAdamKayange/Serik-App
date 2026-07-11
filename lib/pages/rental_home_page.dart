@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/pages/admin_map_page.dart';
 import 'package:serkapp/pages/home_page.dart';
 import 'package:serkapp/pages/house_registration_page.dart';
@@ -65,6 +66,7 @@ class _RentalHomePageState extends State<RentalHomePage>
     setState(() => _isLoading = true);
     try {
       final fetchedHousesData = await ApiService.getMyHouses();
+      if (!mounted) return;
       final List<HouseData> fetchedHouses = fetchedHousesData
           .map((json) => HouseData.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -77,8 +79,15 @@ class _RentalHomePageState extends State<RentalHomePage>
       _animationController.forward(from: 0);
     } catch (e) {
       debugPrint('Error refreshing data: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      CustomDialogs.showError(context, "Imeshindwa kupakia data. Jaribu tena.");
+      CustomDialogs.showError(
+        context,
+        context.tr(
+          'Imeshindwa kupakia data. Jaribu tena.',
+          en: 'Could not load data. Please try again.',
+        ),
+      );
     }
   }
 
@@ -234,7 +243,7 @@ class _RentalHomePageState extends State<RentalHomePage>
             ),
             const SizedBox(width: 8),
             Text(
-              "Taarifa za Akaunti",
+              context.tr('Taarifa za Akaunti', en: 'Account Information'),
               style: TextStyle(
                 color: isDarkMode ? Colors.white : Colors.black87,
               ),
@@ -247,30 +256,30 @@ class _RentalHomePageState extends State<RentalHomePage>
           children: [
             _buildProfileRow(
               Icons.person_outline,
-              "Jina",
-              authProvider.userName ?? "Mpangishaji",
+              context.tr('Jina', en: 'Name'),
+              authProvider.userName ?? context.tr('Mpangishaji', en: 'Landlord'),
             ),
             const SizedBox(height: 8),
             _buildProfileRow(
               Icons.email_outlined,
-              "Barua Pepe",
+              context.tr('Barua Pepe', en: 'Email'),
               authProvider.userEmail ?? "email@example.com",
             ),
             const SizedBox(height: 8),
             _buildProfileRow(
               Icons.phone_android,
-              "Simu",
-              authProvider.phone ?? "Hakuna",
+              context.tr('Simu', en: 'Phone'),
+              authProvider.phone ?? context.tr('Hakuna', en: 'None'),
             ),
             const SizedBox(height: 8),
             _buildProfileRow(
               Icons.admin_panel_settings,
-              "Aina",
+              context.tr('Aina', en: 'Type'),
               authProvider.userRole ?? "landlord",
             ),
             const Divider(),
             Text(
-              "Jumla ya Nyumba: ${houses.length}",
+              ': ',
               style: TextStyle(
                 fontSize: 14,
                 color: isDarkMode ? Colors.white70 : Colors.black54,
@@ -281,7 +290,7 @@ class _RentalHomePageState extends State<RentalHomePage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Funga"),
+            child: Text(context.tr('Funga', en: 'Close')),
           ),
           ElevatedButton(
             onPressed: () {
@@ -289,7 +298,7 @@ class _RentalHomePageState extends State<RentalHomePage>
               _logout();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Toka"),
+            child: Text(context.tr('Toka', en: 'Logout')),
           ),
         ],
       ),
@@ -334,8 +343,8 @@ class _RentalHomePageState extends State<RentalHomePage>
     Color textColor = isDarkMode ? Colors.white : Colors.black87;
     Color subtextColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
     Color cardShadowColor = isDarkMode
-        ? Colors.white.withOpacity(0.05)
-        : Colors.black.withOpacity(0.1);
+        ? Colors.white.withValues(alpha: 0.05)
+        : Colors.black.withValues(alpha: 0.1);
     Color appBarGradientEnd = isDarkMode
         ? const Color(0xFF388E3C)
         : const Color(0xFF4CAF50);
@@ -389,7 +398,7 @@ class _RentalHomePageState extends State<RentalHomePage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -399,9 +408,9 @@ class _RentalHomePageState extends State<RentalHomePage>
             ),
           ),
           const SizedBox(width: 12),
-          const Text(
-            "Mpangishaji Pro",
-            style: TextStyle(
+          Text(
+            context.tr('Mpangishaji Pro', en: 'Landlord Pro'),
+            style: const TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 18,
               color: Colors.white,
@@ -415,7 +424,7 @@ class _RentalHomePageState extends State<RentalHomePage>
         Container(
           margin: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12),
           ),
           child: IconButton(
@@ -427,14 +436,17 @@ class _RentalHomePageState extends State<RentalHomePage>
               themeProvider.toggleTheme();
             },
             tooltip: isDarkMode
-                ? "Badilisha hadi Mwangaza"
-                : "Badilisha hadi Giza",
+                ? context.tr('Badilisha hadi Mwangaza', en: 'Switch to Light')
+                : context.tr('Badilisha hadi Giza', en: 'Switch to Dark'),
           ),
         ),
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.white),
           onPressed: () =>
-              CustomDialogs.showSuccess(context, "Hakuna arifa mpya"),
+              CustomDialogs.showSuccess(
+                context,
+                context.tr('Hakuna arifa mpya', en: 'No new notifications'),
+              ),
         ),
         // 🔥 PROFILE BUTTON – now uses the real profile dialog
         IconButton(
@@ -624,7 +636,7 @@ class _RentalHomePageState extends State<RentalHomePage>
                   "Karibu kwenye dashibodi yako",
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                   ),
                 ),
               ],
@@ -633,7 +645,7 @@ class _RentalHomePageState extends State<RentalHomePage>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(greetingIcon, color: Colors.white, size: 32),
@@ -669,7 +681,7 @@ class _RentalHomePageState extends State<RentalHomePage>
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: primaryColor.withOpacity(0.2),
+              color: primaryColor.withValues(alpha: 0.2),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -722,7 +734,7 @@ class _RentalHomePageState extends State<RentalHomePage>
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: primaryColor.withOpacity(0.3),
+                    color: primaryColor.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
@@ -806,7 +818,7 @@ class _RentalHomePageState extends State<RentalHomePage>
                       width: 70,
                       height: 70,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
@@ -1031,8 +1043,8 @@ class _RentalHomePageState extends State<RentalHomePage>
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: payment.status == 'Paid'
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.orange.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -1085,3 +1097,6 @@ class _RentalHomePageState extends State<RentalHomePage>
     );
   }
 }
+
+
+

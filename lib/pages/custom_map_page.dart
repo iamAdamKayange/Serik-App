@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart' hide Marker;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/model/house_data.dart';
 import 'package:serkapp/model/rental_model.dart';
 import 'package:serkapp/pages/register_page.dart';
@@ -20,14 +21,15 @@ import 'package:serkapp/providers/theme_provider.dart';
 import 'package:serkapp/pages/login_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// Maeneo ya vyuo – yanaweza kubadilishwa kuwa dynamic kutoka API (kwa sasa ni static)
 const List<Map<String, dynamic>> universities = [
-  {'name': 'UDOM', 'lat': -6.1730, 'lng': 35.7419, 'radius_km': 1.5},
-  {'name': 'UDSM', 'lat': -6.7696, 'lng': 39.2410, 'radius_km': 2.0},
-  {'name': 'MUST', 'lat': -6.8235, 'lng': 37.6606, 'radius_km': 1.0},
-  {'name': 'DIT', 'lat': -6.8160, 'lng': 39.2803, 'radius_km': 1.2},
-  {'name': 'MUCE', 'lat': -6.9158, 'lng': 39.2736, 'radius_km': 1.8},
-  {'name': 'IFM', 'lat': -6.8230, 'lng': 39.2691, 'radius_km': 1.3},
-  {'name': 'CBE', 'lat': -6.1735, 'lng': 35.7425, 'radius_km': 1.2},
+  {'name': 'UDOM', 'lat': -6.21630, 'lng': 35.7419, 'radius_km': 1.5},
+  {'name': 'UDSM', 'lat': -6.7816, 'lng': 39.20567, 'radius_km': 2.0},
+  {'name': 'MUST', 'lat': -8.909401, 'lng': 33.460773, 'radius_km': 1.0},
+  {'name': 'DIT', 'lat': -6.8144, 'lng': 39.2833, 'radius_km': 1.2},
+  {'name': 'CBE', 'lat': -6.1736, 'lng': 35.7410, 'radius_km': 1.5},
+  {'name': 'SUA', 'lat': -6.6999, 'lng': 36.6936, 'radius_km': 1.8},
+  {'name': 'IFM', 'lat': -6.81395, 'lng': 39.29366, 'radius_km': 1.3},
 ];
 
 class CustomMapPage extends StatefulWidget {
@@ -62,7 +64,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
     'Biashara',
   ];
 
-  List<RentalSpot> _rentalSpots = [];
+  List<RentalSpot> _rentalSpots = []; // data halisi kutoka API
 
   bool get isDarkMode =>
       Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
@@ -156,25 +158,24 @@ class _CustomMapPageState extends State<CustomMapPage> {
     }
   }
 
-  // ==================== UPDATED: Friendly error handling ====================
+  // ---------- LOAD REAL DATA FROM BACKEND ----------
   Future<void> _loadRentalSpotsFromAPI() async {
     setState(() => _isLoading = true);
     try {
       debugPrint('📍 Loading houses from backend...');
       final List<dynamic> housesJson = await ApiService.getAllHouses();
-      debugPrint('✅ Loaded ${housesJson.length} houses');
+      debugPrint('✅ Loaded ${housesJson.length} houses from database');
 
       final List<RentalSpot> spots = housesJson.map((json) {
         final houseData = HouseData.fromJson(json as Map<String, dynamic>);
         return RentalSpot.fromHouseData(houseData);
       }).toList();
 
+      // Tunaweka tu zile zilizo na viwianishi halali (lat/lng si 0.0)
       final spotsWithLocation = spots
           .where((spot) => spot.hasValidLocation())
           .toList();
-      debugPrint(
-        '📍 Spots with valid coordinates: ${spotsWithLocation.length}',
-      );
+      debugPrint('📍 Valid location houses: ${spotsWithLocation.length}');
 
       setState(() => _rentalSpots = spotsWithLocation);
       await _loadMarkers();
@@ -206,6 +207,8 @@ class _CustomMapPageState extends State<CustomMapPage> {
 
     for (var spot in filteredByUni) {
       if (_applyFilters(spot)) {
+        // Hakikisha spot ina viwianishi halali kabla ya kuunda marker
+        if (!spot.hasValidLocation()) continue;
         final Uint8List icon = await _createCustomMarkerBitmap(
           spot.rentPrice.toInt(),
           spot.type,
@@ -238,16 +241,36 @@ class _CustomMapPageState extends State<CustomMapPage> {
     if (_selectedType != 'Zote' && spot.type != _selectedType) return false;
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
-      if (!spot.name.toLowerCase().contains(query) &&
-          !spot.location.toLowerCase().contains(query) &&
-          !spot.rentPrice.toString().contains(query) &&
-          !spot.type.toLowerCase().contains(query)) {
+      final searchableText = [
+        spot.name,
+        spot.firstName,
+        spot.lastName,
+        spot.brandName,
+        spot.ownerName,
+        spot.houseNumber,
+        spot.location,
+        spot.address,
+        spot.region,
+        spot.district,
+        spot.division,
+        spot.ward,
+        spot.village,
+        spot.street,
+        spot.type,
+        spot.status,
+        spot.description,
+        spot.nearbyAmenities ?? '',
+        spot.formattedPrice,
+        spot.rentPrice.toStringAsFixed(0),
+      ].join(' ').toLowerCase();
+      if (!searchableText.contains(query)) {
         return false;
       }
     }
     return true;
   }
 
+  // ---------- University markers (bado static – unaweza kubadilisha kuwa dynamic kwa API) ----------
   Future<void> _addUniversityMarkers() async {
     final Set<Marker> uniMarkers = {};
     for (var uni in universities) {
@@ -333,7 +356,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                 _refreshMarkers();
               },
               icon: const Icon(Icons.filter_alt),
-              label: const Text("Onyesha Nyumba Karibu"),
+              label: Text(context.tr('Onyesha Nyumba Karibu', en: 'Show Nearby Houses')),
               style: FilledButton.styleFrom(backgroundColor: primaryColor),
             ),
           ],
@@ -342,52 +365,53 @@ class _CustomMapPageState extends State<CustomMapPage> {
     );
   }
 
-  // All marker creation methods (unchanged from your original)
+  // ---------- Marker design (same as original) ----------
   Future<Uint8List> _createCustomMarkerBitmap(int price, String type) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
     final Color markerColor = _getMarkerColor(type);
-    const double width = 60;
-    const double height = 28;
+    const double width = 58;
+    const double height = 72;
+    const Offset center = Offset(width / 2, 24);
 
     final Paint shadowPaint = Paint()
-      ..color = Colors.black.withAlpha(64)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0.5, 0.5, width, height),
-        const Radius.circular(6),
-      ),
-      shadowPaint,
+      ..color = Colors.black.withAlpha(72)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    Path pinPath({double dx = 0, double dy = 0}) {
+      return Path()
+        ..moveTo(width / 2 + dx, 68 + dy)
+        ..cubicTo(45 + dx, 52 + dy, 54 + dx, 41 + dy, 54 + dx, 25 + dy)
+        ..cubicTo(54 + dx, 10 + dy, 43 + dx, 1 + dy, 29 + dx, 1 + dy)
+        ..cubicTo(15 + dx, 1 + dy, 4 + dx, 10 + dy, 4 + dx, 25 + dy)
+        ..cubicTo(
+          4 + dx,
+          41 + dy,
+          13 + dx,
+          52 + dy,
+          width / 2 + dx,
+          68 + dy,
+        )
+        ..close();
+    }
+
+    canvas.drawPath(pinPath(dx: 1.5, dy: 2.5), shadowPaint);
+    canvas.drawPath(pinPath(), Paint()..color = markerColor);
+    canvas.drawPath(
+      pinPath(),
+      Paint()
+        ..color = Colors.white.withAlpha(70)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
     );
 
-    final Paint bgPaint = Paint()..color = markerColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, width, height),
-        const Radius.circular(6),
-      ),
-      bgPaint,
+    canvas.drawCircle(center, 10.5, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 6.5, Paint()..color = markerColor);
+    canvas.drawCircle(
+      const Offset(22, 15),
+      4.5,
+      Paint()..color = Colors.white.withAlpha(115),
     );
-
-    final Paint borderPaint = Paint()
-      ..color = markerColor.withAlpha(230)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, width, height),
-        const Radius.circular(6),
-      ),
-      borderPaint,
-    );
-
-    final Paint circlePaint = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(14, height / 2), 8, circlePaint);
-    final Paint innerPaint = Paint()..color = markerColor;
-    canvas.drawCircle(Offset(14, height / 2), 5.5, innerPaint);
-    final Paint shinePaint = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(12, height / 2 - 1.5), 1.5, shinePaint);
 
     final iconPainter = TextPainter(
       textDirection: ui.TextDirection.ltr,
@@ -401,72 +425,32 @@ class _CustomMapPageState extends State<CustomMapPage> {
         fontWeight: FontWeight.bold,
       ),
     );
-    iconPainter.layout(minWidth: 0, maxWidth: 12);
+    iconPainter.layout(minWidth: 0, maxWidth: 16);
     iconPainter.paint(
       canvas,
-      Offset(14 - iconPainter.width / 2, (height / 2) - iconPainter.height / 2),
+      Offset(
+        center.dx - iconPainter.width / 2,
+        center.dy - iconPainter.height / 2,
+      ),
     );
 
     final pricePainter = TextPainter(
       textDirection: ui.TextDirection.ltr,
-      textAlign: TextAlign.left,
+      textAlign: TextAlign.center,
     );
     pricePainter.text = TextSpan(
       text: _abbreviatePrice(price),
       style: const TextStyle(
-        fontSize: 9.5,
+        fontSize: 9.0,
         color: Colors.white,
         fontWeight: FontWeight.w800,
       ),
     );
-    pricePainter.layout(minWidth: 0, maxWidth: width - 28);
-    pricePainter.paint(canvas, Offset(26, 7));
-
-    String tagText = _getShortTag(type);
-    final Paint tagBgPaint = Paint()..color = Colors.white.withAlpha(64);
-    double tagWidth = 18.0;
-    double tagHeight = 11.0;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(26, 16, tagWidth, tagHeight),
-        const Radius.circular(3),
-      ),
-      tagBgPaint,
-    );
-
-    final tagPainter = TextPainter(
-      textDirection: ui.TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-    tagPainter.text = TextSpan(
-      text: tagText,
-      style: const TextStyle(
-        fontSize: 6.5,
-        color: Colors.white,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-    tagPainter.layout(minWidth: 0, maxWidth: tagWidth);
-    tagPainter.paint(
+    pricePainter.layout(minWidth: 0, maxWidth: width - 10);
+    pricePainter.paint(
       canvas,
-      Offset(
-        26 + (tagWidth - tagPainter.width) / 2,
-        16 + (tagHeight - tagPainter.height) / 2,
-      ),
+      Offset((width - pricePainter.width) / 2, 42),
     );
-
-    final Paint pinPaint = Paint()..color = markerColor;
-    final Path pinPath = Path();
-    double pinX = width / 2;
-    double pinY = height - 1;
-    pinPath.moveTo(pinX - 4, pinY);
-    pinPath.lineTo(pinX, pinY + 6);
-    pinPath.lineTo(pinX + 4, pinY);
-    pinPath.close();
-    canvas.drawPath(pinPath, pinPaint);
-
-    final Paint pinHighlight = Paint()..color = Colors.white.withAlpha(102);
-    canvas.drawCircle(Offset(pinX, pinY + 2), 1, pinHighlight);
 
     final img = await pictureRecorder.endRecording().toImage(
       width.toInt(),
@@ -497,27 +481,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
     }
   }
 
-  String _getShortTag(String type) {
-    switch (type.toLowerCase()) {
-      case 'apartment':
-        return 'Pipa';
-      case 'nyumba ya kawaida':
-        return 'Majl';
-      case 'studio':
-        return 'Stu';
-      case 'mansion':
-        return 'Mans';
-      case 'hostel':
-        return 'Host';
-      case 'ghorofa':
-        return 'Ghor';
-      case 'biashara':
-        return 'Bia';
-      default:
-        return 'Nyum';
-    }
-  }
-
   String _abbreviatePrice(int price) {
     if (price >= 1000000) return '${(price / 1000000).toStringAsFixed(1)}M';
     if (price >= 1000) return '${(price / 1000).toStringAsFixed(0)}K';
@@ -545,6 +508,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
     }
   }
 
+  // ---------- Filter bottom sheet (same as original) ----------
   void _showFiltersBottomSheet() {
     showModalBottomSheet(
       context: context,
@@ -793,6 +757,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
     );
   }
 
+  // ---------- Property Bottom Sheet (imebadilishwa kidogo kuonyesha data halisi) ----------
   void _showPropertyBottomSheet(RentalSpot spot) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final isLoggedIn = authProvider.isLoggedIn;
@@ -843,12 +808,12 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                 imageUrl: spot.getFirstImage()!,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                placeholder: (_, __) => Center(
+                                placeholder: (_, _) => Center(
                                   child: CircularProgressIndicator(
                                     color: primaryColor,
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => Icon(
+                                errorWidget: (_, _, _) => Icon(
                                   Icons.broken_image,
                                   size: 40,
                                   color: isDarkMode
@@ -869,7 +834,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      spot.name,
+                      spot.brandName, // jina maarufu
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
@@ -897,7 +862,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // VIDEO SECTION
+                    // Video section
                     if (spot.videos.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -941,7 +906,9 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                     Icon(
                                       Icons.play_circle_filled,
                                       size: 50,
-                                      color: Colors.white.withOpacity(0.9),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.9,
+                                      ),
                                     ),
                                     Positioned(
                                       bottom: 8,
@@ -976,7 +943,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       const SizedBox(height: 12),
                     ],
 
-                    // Owner Name Preview
+                    // Owner preview
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -1015,7 +982,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                   ),
                                 ),
                                 Text(
-                                  spot.getFullOwnerName(),
+                                  spot.ownerName,
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
@@ -1030,44 +997,58 @@ class _CustomMapPageState extends State<CustomMapPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Price and Bedrooms
+                    // Price & Bedrooms
                     Row(
                       children: [
                         Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isDarkMode
-                                  ? Colors.green[900]
-                                  : Colors.green[50],
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
+                          child: isLoggedIn
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode
+                                        ? Colors.green[900]
+                                        : Colors.green[50],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.money_rounded,
+                                        color: primaryColor,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        spot.formattedPrice,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                      Text(
+                                        '/mwezi',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: subtextColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : _buildLockedPreviewCard(
                                   Icons.money_rounded,
-                                  color: primaryColor,
-                                  size: 18,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  spot.formattedPrice,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: primaryColor,
+                                  context.tr(
+                                    'Bei imefichwa',
+                                    en: 'Price hidden',
+                                  ),
+                                  context.tr(
+                                    'Ingia kuona kodi',
+                                    en: 'Sign in to view rent',
                                   ),
                                 ),
-                                Text(
-                                  '/mwezi',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: subtextColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1111,27 +1092,39 @@ class _CustomMapPageState extends State<CustomMapPage> {
                     const SizedBox(height: 16),
 
                     // Address
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_rounded,
-                          size: 14,
-                          color: subtextColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            spot.getFormattedAddress(),
-                            style: TextStyle(fontSize: 12, color: subtextColor),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                    if (isLoggedIn)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_rounded,
+                            size: 14,
+                            color: subtextColor,
                           ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              spot.getFormattedAddress(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subtextColor,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      _buildLockedPreviewCard(
+                        Icons.location_on_rounded,
+                        context.tr('Eneo limefichwa', en: 'Location hidden'),
+                        context.tr(
+                          'Ingia kuona anwani ya nyumba',
+                          en: 'Sign in to view the address',
                         ),
-                      ],
-                    ),
+                      ),
                     const SizedBox(height: 20),
 
-                    // Logged-in user full details
                     if (isLoggedIn) ...[
                       if (spot.hasAnyFeature) ...[
                         Text(
@@ -1279,7 +1272,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
                             ],
                           ),
                         ),
-
                       if (spot.hasDeposit()) const SizedBox(height: 12),
 
                       Row(
@@ -1291,7 +1283,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                 _navigateToFullDetails(spot);
                               },
                               icon: const Icon(Icons.info_outline_rounded),
-                              label: const Text('Maelezo Kamili'),
+                              label: Text(context.tr('Maelezo Kamili', en: 'Full Details')),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: primaryColor,
                                 side: BorderSide(color: primaryColor),
@@ -1311,7 +1303,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                 }
                               },
                               icon: const Icon(Icons.phone_rounded),
-                              label: const Text('Piga Simu'),
+                              label: Text(context.tr('Piga Simu', en: 'Call')),
                               style: FilledButton.styleFrom(
                                 backgroundColor: primaryColor,
                                 shape: RoundedRectangleBorder(
@@ -1323,6 +1315,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                         ],
                       ),
                     ] else ...[
+                      // haijeingia – onyesha ujumbe wa kuingia
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -1370,7 +1363,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                   _showLoginDialog(spot);
                                 },
                                 icon: const Icon(Icons.login_rounded),
-                                label: const Text('Ingia Ili Kuona Zaidi'),
+                                label: Text(context.tr('Ingia Ili Kuona Zaidi', en: 'Sign in to See More')),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: primaryColor,
                                   shape: RoundedRectangleBorder(
@@ -1405,6 +1398,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
     );
   }
 
+  // ---------- Dialog and helpers ----------
   void _showLoginDialog(RentalSpot spot) {
     showDialog(
       context: context,
@@ -1525,7 +1519,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            child: const Text('Sasa'),
+                            child: Text(context.tr('Sasa', en: 'Now')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1542,7 +1536,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            child: const Text('Ingia Sasa'),
+                            child: Text(context.tr('Ingia Sasa', en: 'Sign in Now')),
                           ),
                         ),
                       ],
@@ -1592,13 +1586,67 @@ class _CustomMapPageState extends State<CustomMapPage> {
     );
   }
 
+  Widget _buildLockedPreviewCard(
+    IconData icon,
+    String title,
+    String subtitle,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.grey[850] : Colors.grey[100],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: subtextColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: subtextColor),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(
+            Icons.lock_rounded,
+            size: 15,
+            color: isDarkMode ? Colors.grey[600] : Colors.grey,
+          ),
+        ],
+      ),
+    );
+  }
+
   void _playVideo(String videoUrl) async {
     final uri = Uri.parse(videoUrl);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Haikuweza kufungua video.')),
+        SnackBar(content: Text(context.tr('Haikuweza kufungua video.', en: 'Could not open video.'))),
       );
     }
   }
@@ -1640,6 +1688,14 @@ class _CustomMapPageState extends State<CustomMapPage> {
 
   void _searchProperties(String query) {
     setState(() => _searchQuery = query);
+    _refreshMarkers();
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchQuery = '';
+      _searchController.clear();
+    });
     _refreshMarkers();
   }
 
@@ -1702,7 +1758,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       controller: _searchController,
                       style: TextStyle(color: textColor),
                       decoration: InputDecoration(
-                        hintText: 'Tafuta nyumba, eneo, bei...',
+                        hintText: context.tr('Tafuta nyumba, eneo, bei...', en: 'Search houses, area, price...'),
                         border: InputBorder.none,
                         hintStyle: TextStyle(
                           color: isDarkMode ? Colors.grey[500] : Colors.grey,
@@ -1711,6 +1767,12 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       onChanged: _searchProperties,
                     ),
                   ),
+                  if (_searchQuery.isNotEmpty)
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: primaryColor),
+                      onPressed: _clearSearch,
+                      tooltip: context.tr('Futa utafutaji', en: 'Clear search'),
+                    ),
                   const SizedBox(width: 8),
                   Container(
                     width: 1,
@@ -1721,7 +1783,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                   IconButton(
                     icon: Icon(Icons.filter_list_rounded, color: primaryColor),
                     onPressed: _showFiltersBottomSheet,
-                    tooltip: "Chuja",
+                    tooltip: context.tr('Chuja', en: 'Filter'),
                   ),
                 ],
               ),
@@ -1828,7 +1890,8 @@ class _CustomMapPageState extends State<CustomMapPage> {
           if ((_selectedType != 'Zote' ||
               _minPrice > 0 ||
               _maxPrice < 1000000 ||
-              _selectedUniversity != 'Zote'))
+              _selectedUniversity != 'Zote' ||
+              _searchQuery.isNotEmpty))
             Positioned(
               bottom: 240,
               right: 16,
@@ -1842,7 +1905,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
               ),
             ),
 
-          // 🔥 NEW: Retry button when no houses and not loading (network error)
+          // Retry button when no houses and not loading (network error)
           if (!_isLoading && _rentalSpots.isEmpty && _markers.isEmpty)
             Positioned.fill(
               child: Center(
@@ -1883,7 +1946,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       ElevatedButton.icon(
                         onPressed: () => _loadRentalSpotsFromAPI(),
                         icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Jaribu Tena'),
+                        label: Text(context.tr('Jaribu Tena', en: 'Try Again')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
                         ),
@@ -1974,3 +2037,5 @@ class _CustomMapPageState extends State<CustomMapPage> {
     super.dispose();
   }
 }
+
+

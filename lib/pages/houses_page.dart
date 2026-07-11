@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/model/house_data.dart';
 import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/providers/theme_provider.dart';
@@ -41,25 +42,34 @@ class _HousesPageState extends State<HousesPage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Futa Nyumba'),
+        title: Text(context.tr('Futa Nyumba', en: 'Delete House')),
         content: Text(
-          'Je, una uhakika unataka kufuta "${house.name}"? Hatua hii haiwezi kubatilishwa.',
+          context.tr(
+            'Je, una uhakika unataka kufuta "${house.name}"? Hatua hii haiwezi kubatilishwa.',
+            en: 'Are you sure you want to delete "${house.name}"? This action cannot be undone.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Ghairi'),
+            child: Text(context.tr('Ghairi', en: 'Cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Futa, nina uhakika'),
+            child: Text(
+              context.tr(
+                'Futa, nina uhakika',
+                en: 'Delete, I am sure',
+              ),
+            ),
           ),
         ],
       ),
     );
 
     if (confirm != true) return;
+    if (!mounted) return;
 
     // Step 2: Onyesha loading dialog wakati wa kufuta
     showDialog(
@@ -77,9 +87,9 @@ class _HousesPageState extends State<HousesPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Tafadhali subiri',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              context.tr('Tafadhali subiri', en: 'Please wait'),
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),
@@ -92,64 +102,70 @@ class _HousesPageState extends State<HousesPage> {
       final success = await ApiService.deleteHouse(house.id);
 
       // Funga loading dialog
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context);
 
       if (success) {
         // Step 3: Onyesha dialog ya mafanikio
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green),
-                  SizedBox(width: 8),
-                  Text('Imefanikiwa'),
-                ],
-              ),
-              content: const Text('Nyumba imefutwa kikamilifu!'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Sawa'),
-                ),
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                Text(context.tr('Imefanikiwa', en: 'Success')),
               ],
             ),
-          );
-          // Refresh list
-          widget.onRefresh();
-        }
+            content: Text(
+              context.tr(
+                'Nyumba imefutwa kikamilifu!',
+                en: 'House deleted successfully!',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(context.tr('Sawa', en: 'OK')),
+              ),
+            ],
+          ),
+        );
+        // Refresh list
+        widget.onRefresh();
       } else {
         throw Exception('Delete failed');
       }
     } catch (e) {
       // Funga loading dialog ikiwa bado ipo
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context);
 
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Hitilafu'),
-              ],
-            ),
-            content: const Text(
-              'Imeshindwa kufuta nyumba. Tafadhali jaribu tena.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Jaribu tena'),
-              ),
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.red),
+              const SizedBox(width: 8),
+              Text(context.tr('Hitilafu', en: 'Error')),
             ],
           ),
-        );
-      }
+          content: Text(
+            context.tr(
+              'Imeshindwa kufuta nyumba. Tafadhali jaribu tena.',
+              en: 'Could not delete the house. Please try again.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(context.tr('Jaribu tena', en: 'Try again')),
+            ),
+          ],
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -167,7 +183,7 @@ class _HousesPageState extends State<HousesPage> {
       return Scaffold(
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.grey[50],
         appBar: AppBar(
-          title: const Text('Nyumba Zangu'),
+          title: Text(context.tr('Nyumba Zangu', en: 'My Houses')),
           backgroundColor: Theme.of(context).primaryColor,
         ),
         body: Center(
@@ -181,12 +197,18 @@ class _HousesPageState extends State<HousesPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Hakuna nyumba zilizosajiliwa',
+                context.tr(
+                  'Hakuna nyumba zilizosajiliwa',
+                  en: 'No registered houses',
+                ),
                 style: TextStyle(fontSize: 16, color: subtextColor),
               ),
               const SizedBox(height: 8),
               Text(
-                'Bonyeza kitufe cha "+" kuongeza nyumba',
+                context.tr(
+                  'Bonyeza kitufe cha "+" kuongeza nyumba',
+                  en: 'Tap the "+" button to add a house',
+                ),
                 style: TextStyle(fontSize: 14, color: subtextColor),
               ),
             ],
@@ -198,7 +220,7 @@ class _HousesPageState extends State<HousesPage> {
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Nyumba Zangu'),
+        title: Text(context.tr('Nyumba Zangu', en: 'My Houses')),
         backgroundColor: Theme.of(context).primaryColor,
         actions: [
           IconButton(
@@ -272,7 +294,7 @@ class _HousesPageState extends State<HousesPage> {
                           onPressed: _isProcessing
                               ? null
                               : () => _editHouse(house),
-                          tooltip: 'Hariri',
+                          tooltip: context.tr('Hariri', en: 'Edit'),
                         ),
                         IconButton(
                           icon: const Icon(
@@ -282,7 +304,7 @@ class _HousesPageState extends State<HousesPage> {
                           onPressed: _isProcessing
                               ? null
                               : () => _deleteHouse(house),
-                          tooltip: 'Futa',
+                          tooltip: context.tr('Futa', en: 'Delete'),
                         ),
                       ],
                     ),
@@ -292,7 +314,7 @@ class _HousesPageState extends State<HousesPage> {
                         Expanded(
                           child: _buildInfoChip(
                             Icons.attach_money,
-                            'Kodi: TZS ${NumberFormat('#,###').format(house.rentPrice)}',
+                            '${context.tr('Kodi', en: 'Rent')}: TZS ${NumberFormat('#,###').format(house.rentPrice)}',
                             isDarkMode,
                           ),
                         ),
@@ -300,7 +322,7 @@ class _HousesPageState extends State<HousesPage> {
                         Expanded(
                           child: _buildInfoChip(
                             Icons.bed,
-                            'Vyumba: ${house.bedrooms}',
+                            '${context.tr('Vyumba', en: 'Rooms')}: ${house.bedrooms}',
                             isDarkMode,
                           ),
                         ),

@@ -34,14 +34,14 @@ class ReportsPage extends StatelessWidget {
         ? const Color(0xFF4CAF50)
         : const Color(0xFF0D47A1);
     final Color cardShadowColor = isDark
-        ? Colors.black.withOpacity(0.3)
-        : Colors.grey.withOpacity(0.08);
+        ? Colors.black.withValues(alpha: 0.3)
+        : Colors.grey.withValues(alpha: 0.08);
     final Color summaryBgColor = isDark
         ? const Color(0xFF1E1E1E)
         : Colors.white;
     final Color iconBgColor = isDark
-        ? primaryColor.withOpacity(0.15)
-        : primaryColor.withOpacity(0.1);
+        ? primaryColor.withValues(alpha: 0.15)
+        : primaryColor.withValues(alpha: 0.1);
 
     // Gradient colors for total income card
     final List<Color> gradientColors = isDark
@@ -64,7 +64,7 @@ class ReportsPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: primaryColor.withOpacity(0.3),
+                  color: primaryColor.withValues(alpha: 0.3),
                   blurRadius: 15,
                   offset: const Offset(0, 5),
                 ),
@@ -214,8 +214,8 @@ class ReportsPage extends StatelessWidget {
     final Color textColor = isDark ? Colors.white : const Color(0xFF1A1A2E);
     final Color labelColor = isDark ? Colors.grey[400]! : Colors.grey[500]!;
     final Color shadowColor = isDark
-        ? Colors.black.withOpacity(0.3)
-        : Colors.grey.withOpacity(0.08);
+        ? Colors.black.withValues(alpha: 0.3)
+        : Colors.grey.withValues(alpha: 0.08);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -238,7 +238,7 @@ class ReportsPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: color, size: 28),

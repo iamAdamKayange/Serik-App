@@ -23,8 +23,8 @@ class MaintenancePage extends StatelessWidget {
     final Color emptyIconColor = isDark ? Colors.grey[700]! : Colors.grey[400]!;
     final Color emptyTextColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final Color shadowColor = isDark
-        ? Colors.black.withOpacity(0.3)
-        : Colors.grey.withOpacity(0.08);
+        ? Colors.black.withValues(alpha: 0.3)
+        : Colors.grey.withValues(alpha: 0.08);
 
     if (maintenanceRequests.isEmpty) {
       return Scaffold(
@@ -83,7 +83,7 @@ class MaintenancePage extends StatelessWidget {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: priorityColor.withOpacity(isDark ? 0.2 : 0.1),
+                  color: priorityColor.withValues(alpha: isDark ? 0.2 : 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(Icons.build, color: priorityColor, size: 24),
@@ -113,7 +113,9 @@ class MaintenancePage extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: priorityColor.withOpacity(isDark ? 0.2 : 0.1),
+                      color: priorityColor.withValues(
+                        alpha: isDark ? 0.2 : 0.1,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -133,7 +135,7 @@ class MaintenancePage extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: priorityColor.withOpacity(isDark ? 0.2 : 0.1),
+                  color: priorityColor.withValues(alpha: isDark ? 0.2 : 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(

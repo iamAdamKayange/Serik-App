@@ -1,9 +1,7 @@
-// lib/pages/register_page.dart
-// 🔥 USING first_name and last_name WITH THEME PROVIDER
-
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/pages/login_page.dart';
 import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/providers/theme_provider.dart';
@@ -52,8 +50,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nenosiri hazilingani!'),
+        SnackBar(
+          content: Text(
+            context.tr('Nenosiri hazilingani!', en: 'Passwords do not match!'),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -62,8 +62,13 @@ class _RegisterPageState extends State<RegisterPage> {
 
     if (!_agreeToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lazima ukubali sheria na masharti'),
+        SnackBar(
+          content: Text(
+            context.tr(
+              'Lazima ukubali sheria na masharti',
+              en: 'You must accept the terms and conditions',
+            ),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -91,35 +96,97 @@ class _RegisterPageState extends State<RegisterPage> {
       debugPrint('📦 Register response: $result');
 
       if (result != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Usajili umefanikiwa! Tafadhali ingia.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-        );
+        // 🔥 Show success dialog with Lottie tick.json instead of SnackBar
+        await _showSuccessDialog();
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
+        }
       } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Usajili umeshindikana. Jaribu tena.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Registration error: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Usajili umeshindikana. Jaribu tena.'),
+          SnackBar(
+            content: Text(
+              '${context.tr('Hitilafu', en: 'Error')}: ${e.toString()}',
+            ),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      debugPrint('❌ Registration error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hitilafu: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // 🔥 New: Show success dialog with tick.json animation
+  Future<void> _showSuccessDialog() async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: surfaceColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Lottie.asset(
+              "assets/animations/tick.json",
+              height: 120,
+              width: 120,
+              repeat: false,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              context.tr('Usajili Umefanikiwa!', en: 'Registration Successful!'),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: primaryColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.tr(
+                'Tafadhali ingia kwenye akaunti yako.',
+                en: 'Please sign in to your account.',
+              ),
+              style: TextStyle(fontSize: 14, color: hintTextColor),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // close dialog
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                context.tr('Endelea Kuingia', en: 'Continue to Login'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -144,13 +211,12 @@ class _RegisterPageState extends State<RegisterPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      // Back Button
                       IconButton(
                         onPressed: () => Navigator.maybePop(context),
                         icon: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -177,7 +243,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
                   // Welcome Text
                   Text(
-                    'Undaa Akaunti Mpya',
+                    context.tr(
+                      'Undaa Akaunti Mpya',
+                      en: 'Create a New Account',
+                    ),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -186,10 +255,13 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Jisajili kuanza kutafuta nyumba',
+                    context.tr(
+                      'Jisajili kuanza kutafuta nyumba',
+                      en: 'Register to start finding houses',
+                    ),
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -202,7 +274,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -223,12 +295,18 @@ class _RegisterPageState extends State<RegisterPage> {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: _buildRoleChip('Mtumiaji', 'normal'),
+                                  child: _buildRoleChip(
+                                    context.tr('Mtumiaji', en: 'User'),
+                                    'normal',
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: _buildRoleChip(
-                                    'Mwenye Nyumba',
+                                    context.tr(
+                                      'Mwenye Nyumba',
+                                      en: 'Landlord',
+                                    ),
                                     'landlord',
                                   ),
                                 ),
@@ -239,18 +317,21 @@ class _RegisterPageState extends State<RegisterPage> {
 
                           // First Name
                           _buildField(
-                            'Jina la Kwanza',
+                            context.tr('Jina la Kwanza', en: 'First Name'),
                             _firstNameController,
                             Icons.person_outline,
                             validator: (v) => v == null || v.isEmpty
-                                ? 'Jina la kwanza linahitajika'
+                                ? context.tr(
+                                    'Jina la kwanza linahitajika',
+                                    en: 'First name is required',
+                                  )
                                 : null,
                           ),
                           const SizedBox(height: 16),
 
                           // Last Name
                           _buildField(
-                            'Jina la Mwisho',
+                            context.tr('Jina la Mwisho', en: 'Last Name'),
                             _lastNameController,
                             Icons.person_outline,
                             validator: (v) => null,
@@ -259,19 +340,25 @@ class _RegisterPageState extends State<RegisterPage> {
 
                           // Email
                           _buildField(
-                            'Barua Pepe',
+                            context.tr('Barua Pepe', en: 'Email'),
                             _emailController,
                             Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
                             validator: (v) => v == null || v.isEmpty
-                                ? 'Barua pepe inahitajika'
+                                ? context.tr(
+                                    'Barua pepe inahitajika',
+                                    en: 'Email is required',
+                                  )
                                 : null,
                           ),
                           const SizedBox(height: 16),
 
                           // Phone (Optional)
                           _buildField(
-                            'Namba ya Simu (Si lazima)',
+                            context.tr(
+                              'Namba ya Simu (Si lazima)',
+                              en: 'Phone Number (Optional)',
+                            ),
                             _phoneController,
                             Icons.phone_android,
                             keyboardType: TextInputType.phone,
@@ -305,7 +392,10 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                               Expanded(
                                 child: Text(
-                                  'Nakubali sheria na masharti',
+                                  context.tr(
+                                    'Nakubali sheria na masharti',
+                                    en: 'I accept the terms and conditions',
+                                  ),
                                   style: TextStyle(
                                     color: hintTextColor,
                                     fontSize: 12,
@@ -343,9 +433,9 @@ class _RegisterPageState extends State<RegisterPage> {
                                             ),
                                       ),
                                     )
-                                  : const Text(
-                                      'JISAJILI',
-                                      style: TextStyle(
+                                  : Text(
+                                      context.tr('JISAJILI', en: 'REGISTER'),
+                                      style: const TextStyle(
                                         fontSize: 16,
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -360,7 +450,10 @@ class _RegisterPageState extends State<RegisterPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'Tayari una akaunti?',
+                                context.tr(
+                                  'Tayari una akaunti?',
+                                  en: 'Already have an account?',
+                                ),
                                 style: TextStyle(color: hintTextColor),
                               ),
                               TextButton(
@@ -371,7 +464,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ),
                                 ),
                                 child: Text(
-                                  'Ingia Hapa',
+                                  context.tr('Ingia Hapa', en: 'Sign in here'),
                                   style: TextStyle(
                                     color: primaryColor,
                                     fontWeight: FontWeight.bold,
@@ -464,7 +557,7 @@ class _RegisterPageState extends State<RegisterPage> {
       obscureText: _obscurePassword,
       style: TextStyle(fontSize: 15, color: textColor),
       decoration: InputDecoration(
-        labelText: 'Nenosiri',
+        labelText: context.tr('Nenosiri', en: 'Password'),
         labelStyle: TextStyle(color: hintTextColor),
         prefixIcon: Container(
           padding: const EdgeInsets.all(12),
@@ -494,8 +587,18 @@ class _RegisterPageState extends State<RegisterPage> {
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
       ),
       validator: (value) {
-        if (value == null || value.isEmpty) return 'Tafadhali weka nenosiri';
-        if (value.length < 6) return 'Nenosiri lazima iwe angalau herufi 6';
+        if (value == null || value.isEmpty) {
+          return context.tr(
+            'Tafadhali weka nenosiri',
+            en: 'Please enter your password',
+          );
+        }
+        if (value.length < 6) {
+          return context.tr(
+            'Nenosiri lazima iwe angalau herufi 6',
+            en: 'Password must be at least 6 characters',
+          );
+        }
         return null;
       },
     );
@@ -507,7 +610,7 @@ class _RegisterPageState extends State<RegisterPage> {
       obscureText: _obscureConfirmPassword,
       style: TextStyle(fontSize: 15, color: textColor),
       decoration: InputDecoration(
-        labelText: 'Thibitisha Nenosiri',
+        labelText: context.tr('Thibitisha Nenosiri', en: 'Confirm Password'),
         labelStyle: TextStyle(color: hintTextColor),
         prefixIcon: Container(
           padding: const EdgeInsets.all(12),
@@ -540,9 +643,17 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Tafadhali thibitisha nenosiri';
+          return context.tr(
+            'Tafadhali thibitisha nenosiri',
+            en: 'Please confirm your password',
+          );
         }
-        if (value != _passwordController.text) return 'Nenosiri hazilingani';
+        if (value != _passwordController.text) {
+          return context.tr(
+            'Nenosiri hazilingani',
+            en: 'Passwords do not match',
+          );
+        }
         return null;
       },
     );

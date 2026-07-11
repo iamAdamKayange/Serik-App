@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/pages/home_page.dart';
 import 'package:serkapp/providers/theme_provider.dart';
 import 'package:serkapp/screen/onboarding_screen.dart';
+import 'package:serkapp/services/app_navigation_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends HookConsumerWidget {
   const SplashScreen({super.key});
@@ -55,11 +60,20 @@ class SplashScreen extends HookConsumerWidget {
     useEffect(() {
       // Baada ya 2 seconds, anza fade out
       Future.delayed(const Duration(seconds: 2), () {
-        fadeOutController.forward().then((_) {
+        fadeOutController.forward().then((_) async {
+          final prefs = await SharedPreferences.getInstance();
+          final hasSeenOnboarding =
+              prefs.getBool(OnboardingScreen.onboardingSeenKey) ?? false;
+          if (!context.mounted) return;
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+            MaterialPageRoute(
+              builder: (_) => hasSeenOnboarding
+                  ? const HomePage()
+                  : const OnboardingScreen(),
+            ),
           );
+          unawaited(AppNavigationService.flushPendingNotificationNavigation());
         });
       });
       return null;

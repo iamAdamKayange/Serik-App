@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "670063203144",
+    "project_id": "serkappupdate",
+    "storage_bucket": "serkappupdate.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:670063203144:android:b29f4248e5b30e4054597d",
+        "android_client_info": {
+          "package_name": "com.example.serkapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFS6jPhbJ_sWHHrh6WjwBDcOBbsNwcqB8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

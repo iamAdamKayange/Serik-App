@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.READ_SMS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="serkapp"
@@ -39,7 +40,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-                <meta-data
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="new_houses" />
+        <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCcyVSvRgnLL09Po6Y7IfyPoJq5vAUCEOU"/>
     </application>

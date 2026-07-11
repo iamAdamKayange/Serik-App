@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/pages/admin_map_page.dart';
 import 'package:serkapp/services/payment_service.dart';
 import 'package:serkapp/services/api_services.dart';
@@ -46,7 +47,7 @@ class _PaymentPageState extends State<PaymentPage> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Malipo ya Usajili'),
+        title: Text(context.tr('Malipo ya Usajili', en: 'Registration Payment')),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -64,7 +65,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -73,7 +74,7 @@ class _PaymentPageState extends State<PaymentPage> {
               child: Column(
                 children: [
                   Text(
-                    'Kiasi cha Malipo',
+                    context.tr('Kiasi cha Malipo', en: 'Payment Amount'),
                     style: TextStyle(fontSize: 14, color: subtextColor),
                   ),
                   const SizedBox(height: 8),
@@ -87,7 +88,10 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Ada ya Usajili wa Nyumba',
+                    context.tr(
+                      'Ada ya Usajili wa Nyumba',
+                      en: 'House Registration Fee',
+                    ),
                     style: TextStyle(fontSize: 12, color: subtextColor),
                   ),
                 ],
@@ -107,7 +111,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Muhtasari wa Nyumba',
+                    context.tr('Muhtasari wa Nyumba', en: 'House Summary'),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -134,7 +138,8 @@ class _PaymentPageState extends State<PaymentPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          widget.houseData['location'] ?? 'Eneo',
+                          widget.houseData['location'] ??
+                              context.tr('Eneo', en: 'Location'),
                           style: TextStyle(color: subtextColor, fontSize: 12),
                         ),
                       ),
@@ -147,7 +152,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
             // Payment Method Selection
             Text(
-              'Chagua Njia ya Malipo',
+              context.tr('Chagua Njia ya Malipo', en: 'Choose Payment Method'),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -177,7 +182,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? primaryColor.withOpacity(0.1)
+                          ? primaryColor.withValues(alpha: 0.1)
                           : surfaceColor,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
@@ -218,7 +223,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Namba ya Simu',
+                    context.tr('Namba ya Simu', en: 'Phone Number'),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -269,9 +274,9 @@ class _PaymentPageState extends State<PaymentPage> {
                           ),
                         ),
                       )
-                    : const Text(
-                        'Lipa Sasa',
-                        style: TextStyle(
+                    : Text(
+                        context.tr('Lipa Sasa', en: 'Pay Now'),
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -285,7 +290,7 @@ class _PaymentPageState extends State<PaymentPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
+                color: Colors.blue.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -294,7 +299,10 @@ class _PaymentPageState extends State<PaymentPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Ada hii ni ya kusajili nyumba yako. Baada ya malipo, nyumba yako itaonekana mara moja kwenye ramani.',
+                      context.tr(
+                        'Ada hii ni ya kusajili nyumba yako. Baada ya malipo, nyumba yako itaonekana mara moja kwenye ramani.',
+                        en: 'This fee registers your house. After payment, your house will appear on the map immediately.',
+                      ),
                       style: TextStyle(fontSize: 12, color: Colors.blue[700]),
                     ),
                   ),
@@ -314,11 +322,20 @@ class _PaymentPageState extends State<PaymentPage> {
     if (_selectedPaymentMethod != 'card' &&
         _selectedPaymentMethod != 'bank_transfer') {
       if (_phoneController.text.isEmpty) {
-        CustomDialogs.showError(context, 'Tafadhali weka namba ya simu');
+        CustomDialogs.showError(
+          context,
+          context.tr(
+            'Tafadhali weka namba ya simu',
+            en: 'Please enter a phone number',
+          ),
+        );
         return;
       }
       if (_phoneController.text.length < 10) {
-        CustomDialogs.showError(context, 'Namba ya simu si sahihi');
+        CustomDialogs.showError(
+          context,
+          context.tr('Namba ya simu si sahihi', en: 'Phone number is invalid'),
+        );
         return;
       }
     }
@@ -337,21 +354,29 @@ class _PaymentPageState extends State<PaymentPage> {
         imageUrls: widget.imageUrls,
       );
 
+      if (!mounted) return;
       if (result['success'] == true) {
         _transactionId = result['transactionId'];
         _showPaymentInstructions(result['paymentInstruction']);
       } else {
         CustomDialogs.showError(
           context,
-          result['message'] ?? 'Malipo yameshindikana',
+          result['message'] ??
+              context.tr('Malipo yameshindikana', en: 'Payment failed'),
         );
       }
     } catch (e) {
-      CustomDialogs.showError(context, 'Hitilafu: $e');
+      if (!mounted) return;
+      CustomDialogs.showError(
+        context,
+        '${context.tr('Hitilafu', en: 'Error')}: $e',
+      );
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
@@ -373,7 +398,7 @@ class _PaymentPageState extends State<PaymentPage> {
           children: [
             Icon(Icons.payment, color: primaryColor),
             const SizedBox(width: 8),
-            const Text('Maelekezo ya Malipo'),
+            Text(context.tr('Maelekezo ya Malipo', en: 'Payment Instructions')),
           ],
         ),
         content: Column(
@@ -385,7 +410,7 @@ class _PaymentPageState extends State<PaymentPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -410,7 +435,12 @@ class _PaymentPageState extends State<PaymentPage> {
               Navigator.pop(context);
               _checkPaymentStatus();
             },
-            child: const Text('Nimekamilisha Malipo'),
+            child: Text(
+              context.tr(
+                'Nimekamilisha Malipo',
+                en: 'I Have Completed Payment',
+              ),
+            ),
           ),
         ],
       ),
@@ -432,7 +462,10 @@ class _PaymentPageState extends State<PaymentPage> {
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
             Text(
-              'Inachakata malipo yako...',
+              context.tr(
+                'Inachakata malipo yako...',
+                en: 'Processing your payment...',
+              ),
               style: TextStyle(
                 fontSize: 14,
                 color: Theme.of(context).textTheme.bodyLarge?.color,
@@ -440,7 +473,7 @@ class _PaymentPageState extends State<PaymentPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Tafadhali subiri',
+              context.tr('Tafadhali subiri', en: 'Please wait'),
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
@@ -461,27 +494,29 @@ class _PaymentPageState extends State<PaymentPage> {
         attempts++;
       }
 
-      if (context.mounted) Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context);
 
       if (isPaid) {
         await _saveHouseToDatabase();
       } else {
-        if (context.mounted) {
-          CustomDialogs.showError(
-            context,
-            'Malipo bado hayajathibitishwa. Utapokea taarifa baada ya kuthibitishwa.',
-          );
-          Navigator.pop(context);
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
+        if (!mounted) return;
         CustomDialogs.showError(
           context,
-          'Hitilafu wakati wa kuchakata malipo: $e',
+          context.tr(
+            'Malipo bado hayajathibitishwa. Utapokea taarifa baada ya kuthibitishwa.',
+            en: 'Payment has not been confirmed yet. You will receive a notification after confirmation.',
+          ),
         );
+        Navigator.pop(context);
       }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      CustomDialogs.showError(
+        context,
+        '${context.tr('Hitilafu wakati wa kuchakata malipo', en: 'Error while processing payment')}: $e',
+      );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -502,9 +537,12 @@ class _PaymentPageState extends State<PaymentPage> {
 
       if (result != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              "Nyumba imesajiliwa kikamilifu! Asante kwa malipo yako.",
+              context.tr(
+                'Nyumba imesajiliwa kikamilifu! Asante kwa malipo yako.',
+                en: 'House registered successfully! Thank you for your payment.',
+              ),
             ),
             backgroundColor: Colors.green,
           ),
@@ -526,7 +564,10 @@ class _PaymentPageState extends State<PaymentPage> {
       if (mounted) {
         CustomDialogs.showError(
           context,
-          'Nyumba imepokelewa lakini kuna hitilafu katika kuhifadhi. Tafadhali wasiliana na usaidizi.',
+          context.tr(
+            'Nyumba imepokelewa lakini kuna hitilafu katika kuhifadhi. Tafadhali wasiliana na usaidizi.',
+            en: 'The house was received but there was an error saving it. Please contact support.',
+          ),
         );
       }
     }

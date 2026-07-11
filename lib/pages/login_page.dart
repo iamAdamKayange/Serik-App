@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/pages/normal_user_homepage.dart';
+import 'package:serkapp/l10n/app_localization.dart';
+import 'package:serkapp/pages/home_page.dart';
 import 'package:serkapp/pages/register_page.dart';
 import 'package:serkapp/pages/rental_home_page.dart';
 import 'package:serkapp/services/api_services.dart';
@@ -27,7 +28,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
 
-  // Helper getters for theme colors
   bool get isDarkMode =>
       Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
 
@@ -59,9 +59,6 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      debugPrint('📡 Logging in with ApiService...');
-      debugPrint('📧 Email: ${_emailController.text.trim()}');
-
       final result = await ApiService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -90,35 +87,96 @@ class _LoginPageState extends State<LoginPage> {
         debugPrint('✅ User logged in: $fullName');
         debugPrint('🎭 Role: $userRole');
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Kuingia kumefanikiwa!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // 🔥 Show success dialog with auto-close
+        await _showSuccessDialogWithAutoClose();
 
-        if (widget.redirectTo == 'details' && widget.spotId != null) {
-          Navigator.pop(context, true);
-        } else {
-          _navigateToHomePage(userRole);
+        if (mounted) {
+          if (widget.redirectTo == 'details' && widget.spotId != null) {
+            Navigator.pop(context, true);
+          } else {
+            _navigateToHomePage(userRole);
+          }
         }
       } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                context.tr(
+                  'Barua pepe au nenosiri si sahihi',
+                  en: 'Email or password is incorrect',
+                ),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Login error: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Barua pepe au nenosiri si sahihi'),
+          SnackBar(
+            content: Text('${context.tr('Hitilafu', en: 'Error')}: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      debugPrint('❌ Login error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hitilafu: $e'), backgroundColor: Colors.red),
-      );
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  // 🔥 Dialog inajifungia yenyewe baada ya sekunde 1.5
+  Future<void> _showSuccessDialogWithAutoClose() async {
+    // Onyesha dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha:0.5),
+      builder: (context) => AlertDialog(
+        backgroundColor: surfaceColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Lottie.asset(
+              "assets/animations/completed.json",
+              height: 120,
+              width: 120,
+              repeat: false,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              context.tr('Kuingia kumefanikiwa!', en: 'Login successful!'),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: primaryColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.tr(
+                'Unaelekezwa kwenye dashibodi yako...',
+                en: 'Redirecting to your dashboard...',
+              ),
+              style: TextStyle(fontSize: 14, color: hintTextColor),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // 🔥 Baada ya sekunde 1.5, funga dialog
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (mounted) {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+    }
   }
 
   void _navigateToHomePage(String role) {
@@ -130,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
     } else {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const NormalUserHomepage()),
+        MaterialPageRoute(builder: (_) => const HomePage()),
       );
     }
   }
@@ -153,7 +211,6 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Back Button Only (No Dark Mode Toggle)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
@@ -162,7 +219,7 @@ class _LoginPageState extends State<LoginPage> {
                         icon: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -175,7 +232,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Animation
                   Center(
                     child: SizedBox(
                       height: 180,
@@ -187,9 +243,8 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Welcome Text
                   Text(
-                    'Karibu Tena!',
+                    context.tr('Karibu Tena!', en: 'Welcome Back!'),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -198,15 +253,17 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Ingia kwenye akaunti yako',
+                    context.tr(
+                      'Ingia kwenye akaunti yako',
+                      en: 'Sign in to your account',
+                    ),
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
                   const SizedBox(height: 40),
 
-                  // Login Form Container
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -214,7 +271,7 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -224,13 +281,12 @@ class _LoginPageState extends State<LoginPage> {
                       key: _formKey,
                       child: Column(
                         children: [
-                          // Email Field
                           TextFormField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             style: TextStyle(fontSize: 16, color: textColor),
                             decoration: InputDecoration(
-                              labelText: 'Barua Pepe',
+                              labelText: context.tr('Barua Pepe', en: 'Email'),
                               labelStyle: TextStyle(color: hintTextColor),
                               hintText: 'mwananchi@serikapp.com',
                               hintStyle: TextStyle(color: hintTextColor),
@@ -264,24 +320,32 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Tafadhali weka barua pepe yako';
+                                return context.tr(
+                                  'Tafadhali weka barua pepe yako',
+                                  en: 'Please enter your email',
+                                );
                               }
                               if (!value.contains('@') ||
                                   !value.contains('.')) {
-                                return 'Barua pepe si sahihi';
+                                return context.tr(
+                                  'Barua pepe si sahihi',
+                                  en: 'Email is invalid',
+                                );
                               }
                               return null;
                             },
                           ),
                           const SizedBox(height: 20),
 
-                          // Password Field
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             style: TextStyle(fontSize: 16, color: textColor),
                             decoration: InputDecoration(
-                              labelText: 'Nenosiri',
+                              labelText: context.tr(
+                                'Nenosiri',
+                                en: 'Password',
+                              ),
                               labelStyle: TextStyle(color: hintTextColor),
                               prefixIcon: Container(
                                 padding: const EdgeInsets.all(12),
@@ -326,17 +390,22 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Tafadhali weka nenosiri';
+                                return context.tr(
+                                  'Tafadhali weka nenosiri',
+                                  en: 'Please enter your password',
+                                );
                               }
                               if (value.length < 6) {
-                                return 'Nenosiri lazima iwe angalau herufi 6';
+                                return context.tr(
+                                  'Nenosiri lazima iwe angalau herufi 6',
+                                  en: 'Password must be at least 6 characters',
+                                );
                               }
                               return null;
                             },
                           ),
                           const SizedBox(height: 12),
 
-                          // Remember Me & Forgot Password
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -356,7 +425,7 @@ class _LoginPageState extends State<LoginPage> {
                                     ),
                                   ),
                                   Text(
-                                    'Nikumbuke',
+                                    context.tr('Nikumbuke', en: 'Remember me'),
                                     style: TextStyle(
                                       color: isDarkMode
                                           ? Colors.grey[400]
@@ -368,7 +437,10 @@ class _LoginPageState extends State<LoginPage> {
                               TextButton(
                                 onPressed: () => _showForgotPasswordDialog(),
                                 child: Text(
-                                  'Umesahau nenosiri?',
+                                  context.tr(
+                                    'Umesahau nenosiri?',
+                                    en: 'Forgot password?',
+                                  ),
                                   style: TextStyle(
                                     color: primaryColor,
                                     fontWeight: FontWeight.w500,
@@ -379,7 +451,6 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 24),
 
-                          // Login Button
                           SizedBox(
                             width: double.infinity,
                             height: 56,
@@ -404,9 +475,9 @@ class _LoginPageState extends State<LoginPage> {
                                             ),
                                       ),
                                     )
-                                  : const Text(
-                                      'INGIA',
-                                      style: TextStyle(
+                                  : Text(
+                                      context.tr('INGIA', en: 'SIGN IN'),
+                                      style: const TextStyle(
                                         fontSize: 16,
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -416,12 +487,14 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Register Link
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'Huna akaunti?',
+                                context.tr(
+                                  'Huna akaunti?',
+                                  en: 'No account?',
+                                ),
                                 style: TextStyle(
                                   color: isDarkMode
                                       ? Colors.grey[400]
@@ -436,7 +509,10 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                                 child: Text(
-                                  'Jisajili Sasa',
+                                  context.tr(
+                                    'Jisajili Sasa',
+                                    en: 'Register Now',
+                                  ),
                                   style: TextStyle(
                                     color: primaryColor,
                                     fontWeight: FontWeight.bold,
@@ -451,18 +527,17 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Role Info Message
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           Icons.info_outline_rounded,
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           size: 16,
                         ),
                         const SizedBox(width: 8),
@@ -470,7 +545,7 @@ class _LoginPageState extends State<LoginPage> {
                           child: Text(
                             '🔑 Kama una akaunti ya Mwenye Nyumba, utaelekezwa kwenye Panel yako ya Kusimamia Nyumba.',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 11,
                             ),
                           ),
@@ -478,7 +553,6 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                 ],
               ),
@@ -495,16 +569,24 @@ class _LoginPageState extends State<LoginPage> {
       builder: (context) => AlertDialog(
         backgroundColor: surfaceColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Umesahau Nenosiri?', style: TextStyle(color: textColor)),
+        title: Text(
+          context.tr('Umesahau Nenosiri?', en: 'Forgot Password?'),
+          style: TextStyle(color: textColor),
+        ),
         content: Text(
-          'Wasiliana na msimamizi kwa kupiga simu +255 629 095 954\n\n'
-          'Au tuma ujumbe kwa support@serikapp.com',
+          context.tr(
+            'Wasiliana na msimamizi kwa kupiga simu +255 629 095 954\n\nAu tuma ujumbe kwa support@serikapp.com',
+            en: 'Contact the administrator by calling +255 629 095 954\n\nOr send a message to support@serikapp.com',
+          ),
           style: TextStyle(color: hintTextColor),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Sawa', style: TextStyle(color: primaryColor)),
+            child: Text(
+              context.tr('Sawa', en: 'OK'),
+              style: TextStyle(color: primaryColor),
+            ),
           ),
         ],
       ),

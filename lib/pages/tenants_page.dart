@@ -33,8 +33,8 @@ class TenantsPage extends StatelessWidget {
     final Color emptyIconColor = isDark ? Colors.grey[700]! : Colors.grey[400]!;
     final Color emptyTextColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final Color shadowColor = isDark
-        ? Colors.black.withOpacity(0.3)
-        : Colors.grey.withOpacity(0.08);
+        ? Colors.black.withValues(alpha: 0.3)
+        : Colors.grey.withValues(alpha: 0.08);
 
     if (tenants.isEmpty) {
       return Scaffold(
@@ -91,7 +91,9 @@ class TenantsPage extends StatelessWidget {
               contentPadding: const EdgeInsets.all(12),
               leading: CircleAvatar(
                 radius: 28,
-                backgroundColor: primaryColor.withOpacity(isDark ? 0.2 : 0.1),
+                backgroundColor: primaryColor.withValues(
+                  alpha: isDark ? 0.2 : 0.1,
+                ),
                 child: Icon(Icons.person, color: primaryColor, size: 28),
               ),
               title: Text(
@@ -125,7 +127,7 @@ class TenantsPage extends StatelessWidget {
               trailing: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(isDark ? 0.2 : 0.1),
+                  color: primaryColor.withValues(alpha: isDark ? 0.2 : 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(Icons.chevron_right, color: primaryColor),

@@ -84,7 +84,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     _hasCeilingBoard = house.hasCeilingBoard;
     _hasTiles = house.hasTiles;
     _hasFence = house.hasFence;
-    _isSelfContainer = house.layoutType == 'self_container';
+    _isSelfContainer = house.layoutType == HouseLayoutType.selfContainer;
     _hasPrivateBathroom = house.hasPrivateBathroom;
     _hasPrivateToilet = house.hasPrivateToilet;
     _hasPrivateKitchen = house.hasPrivateKitchen;
@@ -242,7 +242,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
             "assets/animations/tick.json",
             height: 150,
             width: 150,
-            repeat: false,
+            repeat: true,
           ),
           const SizedBox(height: 20),
           Stack(
@@ -1319,7 +1319,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       children: [
         Center(
           child: SizedBox(
-            height: 120,
+            height: 110,
             child: Lottie.asset(
               "assets/animations/location.json",
               repeat: true,
@@ -1705,12 +1705,14 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
   Future<void> _pickImages() async {
     try {
       final List<XFile> images = await _picker.pickMultiImage();
+      if (!mounted) return;
       if (images.isNotEmpty) {
         setState(() {
           _selectedImages.addAll(images);
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Hitilafu ya kupakua picha: $e")));
@@ -1722,6 +1724,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
       if (video != null) {
         final sizeInBytes = await video.length();
+        if (!mounted) return;
         final sizeInMB = sizeInBytes / (1024 * 1024);
         if (sizeInMB > 50) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1734,6 +1737,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Hitilafu kuchagua video: $e')));
@@ -1750,6 +1754,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Huduma ya eneo haijawezeshwa")),
         );
@@ -1760,6 +1765,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Ruhusa ya eneo imekataliwa")),
           );
@@ -1768,6 +1774,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       }
 
       if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Ruhusa ya eneo imekataliwa kabisa")),
         );
@@ -1775,11 +1782,15 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
+      if (!mounted) return;
       final location = gmap.LatLng(position.latitude, position.longitude);
       _selectLocation(location);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Hitilafu ya kupata eneo: $e")));
@@ -1793,6 +1804,49 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
           "${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}";
     });
   }
+
+  // ==================== VIDEO THUMBNAIL GENERATION ====================
+
+  /// Generate thumbnails for all selected videos
+  Future<List<String>> _generateAndUploadThumbnails(List<XFile> videos) async {
+    List<String> thumbnailUrls = [];
+
+    for (final video in videos) {
+      try {
+        _currentFileStatus = "Inatengeneza thumbnail ya ${video.name}...";
+        setState(() {});
+
+        // Generate thumbnail from video
+        final File thumbnailFile = await VideoCompress.getFileThumbnail(
+          video.path,
+          quality: 50, // Good quality
+        );
+
+        if (thumbnailFile.existsSync()) {
+          // Upload thumbnail to backend
+          final XFile thumbnailXFile = XFile(thumbnailFile.path);
+          final String? url = await ApiService.uploadThumbnail(thumbnailXFile);
+
+          if (url != null) {
+            thumbnailUrls.add(url);
+            debugPrint('✅ Thumbnail uploaded: $url');
+          }
+
+          // Delete temporary thumbnail file
+          try {
+            await thumbnailFile.delete();
+          } catch (_) {}
+        }
+      } catch (e) {
+        debugPrint('❌ Thumbnail generation failed for ${video.name}: $e');
+        // Continue with next video
+      }
+    }
+
+    return thumbnailUrls;
+  }
+
+  // ==================== SUBMIT FORM ====================
 
   Future<void> _submitForm() async {
     if (!_validateCurrentStep()) return;
@@ -1823,28 +1877,32 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     });
 
     try {
-      // KAMA NI EDIT, HATUPAKII MEDIA MPYA ISIPOKUWA ZIMECHAGULIWA
       final isEditing = widget.existingHouse != null;
 
       List<String> imageUrls = [];
       List<String> videoUrls = [];
+      List<String> videoThumbnails = [];
 
       if (!isEditing ||
           _selectedImages.isNotEmpty ||
           _selectedVideos.isNotEmpty) {
         // Compress videos
         _currentFileStatus = "Inabana video...";
+        setState(() {});
         final List<XFile> compressedVideos = await _compressVideosInParallel();
 
         _currentFileStatus = "Kuandaa faili za kupakia...";
+        setState(() {});
         final List<http.MultipartFile> multipartFiles =
             await _prepareMultipartFiles(compressedVideos);
         _totalFiles = multipartFiles.length;
         setState(() => _uploadProgress = 0.1);
 
         if (multipartFiles.isNotEmpty) {
-          _currentFileStatus = "Kupakia media kwenye Cloudinary...";
+          _currentFileStatus = "Kupakia media kwenye DigitalOcean Spaces...";
+          setState(() {});
           final uploadedFiles = await _uploadFilesInParallel(multipartFiles);
+
           imageUrls = uploadedFiles
               .where((f) => f['resourceType'] == 'image')
               .map((f) => f['url'] as String)
@@ -1853,6 +1911,15 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
               .where((f) => f['resourceType'] == 'video')
               .map((f) => f['url'] as String)
               .toList();
+
+          // ✅ GENERATE THUMBNAILS FOR VIDEOS
+          if (compressedVideos.isNotEmpty) {
+            _currentFileStatus = "Inatengeneza thumbnails za video...";
+            setState(() {});
+            videoThumbnails = await _generateAndUploadThumbnails(
+              compressedVideos,
+            );
+          }
         }
       }
 
@@ -1864,14 +1931,18 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         if (videoUrls.isEmpty) {
           videoUrls = widget.existingHouse!.videos;
         }
+        if (videoThumbnails.isEmpty) {
+          videoThumbnails = widget.existingHouse!.videoThumbnails;
+        }
       }
 
       setState(() => _uploadProgress = 0.7);
       _currentFileStatus = isEditing
           ? "Inahifadhi mabadiliko..."
           : "Inahifadhi nyumba...";
+      setState(() {});
 
-      final houseData = _buildHouseData(imageUrls, videoUrls);
+      final houseData = _buildHouseData(imageUrls, videoUrls, videoThumbnails);
 
       dynamic result;
       if (isEditing) {
@@ -1895,7 +1966,6 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         );
         Navigator.pop(context, true);
         if (widget.onHouseAdded != null) {
-          // Re-fetch house data or pass the updated house
           widget.onHouseAdded!(null);
         }
       } else {
@@ -2024,6 +2094,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
   Map<String, dynamic> _buildHouseData(
     List<String> imageUrls,
     List<String> videoUrls,
+    List<String> videoThumbnails,
   ) {
     return {
       "name": _houseNameController.text,
@@ -2065,6 +2136,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       "isSharedKitchen": _isSharedKitchen,
       "imageUrls": imageUrls,
       "videoUrls": videoUrls,
+      "videoThumbnails": videoThumbnails, // ✅ SASA INATUMWA
     };
   }
 

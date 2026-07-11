@@ -3,8 +3,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 import '../model/rental_model.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/saved_house_button.dart';
 
 class RentalDetailScreen extends StatelessWidget {
   final RentalSpot spot;
@@ -95,14 +97,12 @@ class RentalDetailScreen extends StatelessWidget {
     );
   }
 
-  void _playVideo(String videoUrl) async {
-    final uri = Uri.parse(videoUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      // Fallback: try to open in web browser
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
-    }
+  // 🔥 NEW: Play video inside a dialog with video_player
+  void _playVideo(BuildContext context, String videoUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => VideoPlayerDialog(videoUrl: videoUrl),
+    );
   }
 
   @override
@@ -112,7 +112,6 @@ class RentalDetailScreen extends StatelessWidget {
         ? const Color(0xFF4CAF50)
         : const Color(0xFF2E7D32);
     final backgroundColor = isDark ? const Color(0xFF121212) : Colors.grey[50]!;
-    final _ = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
     final borderColor = isDark ? Colors.grey[800]! : Colors.grey[200]!;
@@ -120,11 +119,14 @@ class RentalDetailScreen extends StatelessWidget {
         ? primaryColor.withValues(alpha: 0.15)
         : primaryColor.withValues(alpha: 0.05);
 
-    // Prepare owner name and phone with fallbacks
-    String ownerName = spot.getFullOwnerName().trim();
+    // Prepare owner name and phone using new fields
+    String ownerName = spot.ownerName.trim();
     if (ownerName.isEmpty) ownerName = "Mwenye Nyumba";
     String ownerPhone = spot.phone.trim();
     if (ownerPhone.isEmpty) ownerPhone = "Hajabainishwa";
+    String brandName = spot.brandName.trim();
+    if (brandName.isEmpty) brandName = "Nyumba";
+    String houseNumber = spot.houseNumber.trim();
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -141,6 +143,9 @@ class RentalDetailScreen extends StatelessWidget {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          SavedHouseButton(houseId: spot.id),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -185,9 +190,9 @@ class RentalDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // House name
+                  // Brand name (jina maarufu)
                   Text(
-                    spot.name,
+                    brandName,
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -195,28 +200,62 @@ class RentalDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Type badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      spot.type,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: primaryColor,
+                  // Type badge + house number
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          spot.type,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: primaryColor,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      if (houseNumber.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.numbers,
+                                size: 14,
+                                color: subtextColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Namba $houseNumber',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: subtextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 20),
 
-                  // Owner Info Card (Landlord name and phone)
+                  // Owner Info Card
                   _buildOwnerCard(
                     ownerName,
                     ownerPhone,
@@ -290,7 +329,7 @@ class RentalDetailScreen extends StatelessWidget {
                       cardHeaderBg,
                     ),
 
-                  // Video Section (if videos exist)
+                  // Video Section
                   if (spot.videos.isNotEmpty)
                     _buildVideoSection(
                       spot,
@@ -325,7 +364,7 @@ class RentalDetailScreen extends StatelessWidget {
     );
   }
 
-  // ---------- Helper Cards ----------
+  // ---------- Cards (same as before but using spot.ownerName etc.) ----------
 
   Widget _buildOwnerCard(
     String ownerName,
@@ -637,7 +676,7 @@ class RentalDetailScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.1),
+                            color: primaryColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
@@ -677,7 +716,7 @@ class RentalDetailScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.1),
+                              color: Colors.orange.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
@@ -735,7 +774,7 @@ class RentalDetailScreen extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: primaryColor.withOpacity(0.1),
+                          color: primaryColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -873,12 +912,12 @@ class RentalDetailScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isAvailable
-            ? primaryColor.withOpacity(0.1)
+            ? primaryColor.withValues(alpha: 0.1)
             : (isDark ? Colors.grey[800] : Colors.grey[100]),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isAvailable
-              ? primaryColor.withOpacity(0.3)
+              ? primaryColor.withValues(alpha: 0.3)
               : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
         ),
       ),
@@ -1017,7 +1056,7 @@ class RentalDetailScreen extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(isDark ? 0.2 : 0.1),
+                    color: Colors.blue.withValues(alpha: isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -1094,9 +1133,9 @@ class RentalDetailScreen extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
             child: SizedBox(
-              height: 120,
+              height: 210,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: spot.videos.length,
@@ -1106,23 +1145,23 @@ class RentalDetailScreen extends StatelessWidget {
                       ? spot.videoThumbnails[index]
                       : null;
                   return GestureDetector(
-                    onTap: () => _playVideo(videoUrl),
+                    onTap: () => _playVideo(context, videoUrl),
                     child: Container(
-                      width: 160,
-                      margin: const EdgeInsets.only(right: 12),
+                      width: 150,
+                      margin: const EdgeInsets.only(right: 14),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         color: isDark ? Colors.grey[800] : Colors.grey[200],
                         boxShadow: const [
                           BoxShadow(
                             color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
@@ -1130,9 +1169,9 @@ class RentalDetailScreen extends StatelessWidget {
                               CachedNetworkImage(
                                 imageUrl: thumbnail,
                                 fit: BoxFit.cover,
-                                width: 160,
-                                height: 120,
-                                placeholder: (_, __) => Container(
+                                width: 150,
+                                height: 210,
+                                placeholder: (_, _) => Container(
                                   color: isDark
                                       ? Colors.grey[800]
                                       : Colors.grey[200],
@@ -1140,7 +1179,7 @@ class RentalDetailScreen extends StatelessWidget {
                                     child: CircularProgressIndicator(),
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => Container(
+                                errorWidget: (_, _, _) => Container(
                                   color: isDark
                                       ? Colors.grey[800]
                                       : Colors.grey[200],
@@ -1155,17 +1194,68 @@ class RentalDetailScreen extends StatelessWidget {
                                 color: isDark
                                     ? Colors.grey[800]
                                     : Colors.grey[200],
-                                child: const Icon(
-                                  Icons.videocam,
-                                  size: 50,
-                                  color: Colors.white70,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.videocam_rounded,
+                                    size: 54,
+                                    color: Colors.white70,
+                                  ),
                                 ),
                               ),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.12),
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.65),
+                                  ],
+                                ),
+                              ),
+                            ),
                             Center(
-                              child: Icon(
-                                Icons.play_circle_filled,
-                                size: 50,
-                                color: Colors.white.withOpacity(0.9),
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.35),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white70),
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 38,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 10,
+                              right: 10,
+                              bottom: 10,
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.movie_rounded,
+                                    color: Colors.white,
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: Text(
+                                      'Video ${index + 1}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -1258,7 +1348,7 @@ class RentalDetailScreen extends StatelessWidget {
                           fit: BoxFit.cover,
                           width: 140,
                           height: 120,
-                          placeholder: (_, __) => Container(
+                          placeholder: (_, _) => Container(
                             color: isDark ? Colors.grey[800] : Colors.grey[200],
                             child: Center(
                               child: CircularProgressIndicator(
@@ -1266,7 +1356,7 @@ class RentalDetailScreen extends StatelessWidget {
                               ),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => Container(
+                          errorWidget: (_, _, _) => Container(
                             color: isDark ? Colors.grey[800] : Colors.grey[200],
                             child: Icon(
                               Icons.broken_image,
@@ -1358,6 +1448,7 @@ class RentalDetailScreen extends StatelessWidget {
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri);
                 } else {
+                  if (!context.mounted) return;
                   _showErrorSnackBar(context, 'Haiwezekani kusambaza');
                 }
               },
@@ -1385,9 +1476,11 @@ class RentalDetailScreen extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: color.withOpacity(isDark ? 0.2 : 0.1),
+              color: color.withValues(alpha: isDark ? 0.2 : 0.1),
               shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(isDark ? 0.5 : 0.3)),
+              border: Border.all(
+                color: color.withValues(alpha: isDark ? 0.5 : 0.3),
+              ),
             ),
             child: Icon(icon, size: 28, color: color),
           ),
@@ -1411,6 +1504,188 @@ class RentalDetailScreen extends StatelessWidget {
         content: Text(message),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+// 🔥 NEW: Video Player Dialog using video_player package
+class VideoPlayerDialog extends StatefulWidget {
+  final String videoUrl;
+
+  const VideoPlayerDialog({super.key, required this.videoUrl});
+
+  @override
+  State<VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+}
+
+class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+  bool _isMuted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    _initializeVideo();
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      await _controller.initialize();
+      await _controller.setLooping(true);
+      if (!mounted) return;
+      setState(() {
+        _isInitialized = true;
+      });
+      _controller.play();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _hasError = true);
+    }
+  }
+
+  void _togglePlayback() {
+    if (!_isInitialized) return;
+    setState(() {
+      _controller.value.isPlaying ? _controller.pause() : _controller.play();
+    });
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+      _controller.setVolume(_isMuted ? 0 : 1);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: GestureDetector(
+        onTap: _togglePlayback,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_isInitialized)
+              Center(
+                child: AspectRatio(
+                  aspectRatio: _controller.value.aspectRatio,
+                  child: VideoPlayer(_controller),
+                ),
+              )
+            else if (_hasError)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Video imeshindwa kufunguka. Jaribu tena baadae.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              )
+            else
+              const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.55),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.7),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 12,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+                tooltip: 'Funga',
+              ),
+            ),
+            if (_isInitialized && !_controller.value.isPlaying)
+              const Center(
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 92,
+                ),
+              ),
+            if (_isInitialized)
+              Positioned(
+                right: 16,
+                bottom: 76,
+                child: Column(
+                  children: [
+                    IconButton.filled(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black45,
+                      ),
+                      onPressed: _togglePlayback,
+                      icon: Icon(
+                        _controller.value.isPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    IconButton.filled(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black45,
+                      ),
+                      onPressed: _toggleMute,
+                      icon: Icon(
+                        _isMuted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (_isInitialized)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SafeArea(
+                  top: false,
+                  child: VideoProgressIndicator(
+                    _controller,
+                    allowScrubbing: true,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 18,
+                    ),
+                    colors: const VideoProgressColors(
+                      playedColor: Color(0xFF4CAF50),
+                      bufferedColor: Colors.white54,
+                      backgroundColor: Colors.white24,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

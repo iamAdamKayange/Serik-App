@@ -2,11 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/pages/home_page.dart';
 import 'package:serkapp/providers/theme_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends HookConsumerWidget {
+  static const onboardingSeenKey = 'has_seen_onboarding';
+
   const OnboardingScreen({super.key});
+
+  Future<void> _finishOnboarding(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(onboardingSeenKey, true);
+    if (!context.mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const HomePage()),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -17,9 +31,11 @@ class OnboardingScreen extends HookConsumerWidget {
 
     final onboardingData = [
       {
-        'title': 'Pata Nyumba Bora',
-        'description':
-            'Tafuta nyumba za kupanga katika maeneo mbalimbali kwa bei nafuu na mazingira salama. Tunakusaidia kupata makazi yako bora.',
+        'title': context.tr('Pata Nyumba Bora', en: 'Find Better Housing'),
+        'description': context.tr(
+          'Tafuta nyumba za kupanga katika maeneo mbalimbali kwa bei nafuu na mazingira salama. Tunakusaidia kupata makazi yako bora.',
+          en: 'Search rental homes in different areas with fair prices and safer surroundings. We help you find the right place to live.',
+        ),
         'icon': Icons.search_rounded,
         'color': const Color(0xFF2E7D32),
         'image': '🏠',
@@ -27,9 +43,14 @@ class OnboardingScreen extends HookConsumerWidget {
         'gradientDark': [const Color(0xFF1B5E20), const Color(0xFF0D3B0F)],
       },
       {
-        'title': 'Wasiliana Moja kwa Moja',
-        'description':
-            'Wasiliana na wakodisha moja kwa moja bila mwingiliano wa mtu wa tatu. Pata majibu ya haraka na maelezo kamili ya nyumba.',
+        'title': context.tr(
+          'Wasiliana Moja kwa Moja',
+          en: 'Contact Directly',
+        ),
+        'description': context.tr(
+          'Wasiliana na wakodisha moja kwa moja bila mwingiliano wa mtu wa tatu. Pata majibu ya haraka na maelezo kamili ya nyumba.',
+          en: 'Talk to landlords directly without a third party. Get quick answers and complete house information.',
+        ),
         'icon': Icons.chat_rounded,
         'color': const Color(0xFF4CAF50),
         'image': '💬',
@@ -37,9 +58,14 @@ class OnboardingScreen extends HookConsumerWidget {
         'gradientDark': [const Color(0xFF2E7D32), const Color(0xFF1B5E20)],
       },
       {
-        'title': 'Nyumba Salama na Uhakika',
-        'description':
-            'Pata nyumba zenye usalama wa kutosha, hati rasmi za kukodisha, na mazingira rafiki kwa maisha yako. Usalama wako ni kipaumbele chetu.',
+        'title': context.tr(
+          'Nyumba Salama na Uhakika',
+          en: 'Safe and Trusted Homes',
+        ),
+        'description': context.tr(
+          'Pata nyumba zenye usalama wa kutosha, hati rasmi za kukodisha, na mazingira rafiki kwa maisha yako. Usalama wako ni kipaumbele chetu.',
+          en: 'Find homes with reliable safety, clear rental information and friendly surroundings. Your safety comes first.',
+        ),
         'icon': Icons.security_rounded,
         'color': const Color(0xFF66BB6A),
         'image': '🔒',
@@ -56,8 +82,8 @@ class OnboardingScreen extends HookConsumerWidget {
     final subtextColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
     final indicatorColor = isDarkMode ? Colors.grey[700]! : Colors.grey[300]!;
     final buttonBgColor = isDarkMode
-        ? primaryColor.withOpacity(0.2)
-        : primaryColor.withOpacity(0.1);
+        ? primaryColor.withValues(alpha: 0.2)
+        : primaryColor.withValues(alpha: 0.1);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -72,14 +98,7 @@ class OnboardingScreen extends HookConsumerWidget {
                 children: [
                   // Skip Button
                   TextButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HomePage(),
-                        ),
-                      );
-                    },
+                    onPressed: () => _finishOnboarding(context),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -91,7 +110,7 @@ class OnboardingScreen extends HookConsumerWidget {
                       backgroundColor: buttonBgColor,
                     ),
                     child: Text(
-                      'Pita',
+                      context.tr('Pita', en: 'Skip'),
                       style: TextStyle(
                         color: primaryColor,
                         fontWeight: FontWeight.w600,
@@ -140,7 +159,9 @@ class OnboardingScreen extends HookConsumerWidget {
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: primaryColor.withOpacity(0.3),
+                                      color: primaryColor.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       blurRadius: 30,
                                       offset: const Offset(0, 15),
                                     ),
@@ -240,9 +261,9 @@ class OnboardingScreen extends HookConsumerWidget {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              child: const Text(
-                                'Rudi',
-                                style: TextStyle(
+                              child: Text(
+                                context.tr('Rudi', en: 'Back'),
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -263,12 +284,7 @@ class OnboardingScreen extends HookConsumerWidget {
                                   curve: Curves.easeInOutCubic,
                                 );
                               } else {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const HomePage(),
-                                  ),
-                                );
+                                _finishOnboarding(context);
                               }
                             },
                             style: FilledButton.styleFrom(
@@ -282,8 +298,8 @@ class OnboardingScreen extends HookConsumerWidget {
                             ),
                             child: Text(
                               currentPage.value < onboardingData.length - 1
-                                  ? 'Endelea'
-                                  : 'Anza Sasa',
+                                  ? context.tr('Endelea', en: 'Continue')
+                                  : context.tr('Anza Sasa', en: 'Get Started'),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:serkapp/pages/home_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,14 +107,12 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
   void _applyFilterAndSort() {
     List<RentalSpot> filtered = List.from(_allHouses);
 
-    // Filter by bedrooms
     if (_filterBedrooms != null) {
       filtered = filtered
           .where((spot) => spot.bedrooms == _filterBedrooms)
           .toList();
     }
 
-    // Filter by price range
     if (_minPrice != null) {
       filtered = filtered
           .where((spot) => spot.rentPrice >= _minPrice!)
@@ -125,13 +124,10 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
           .toList();
     }
 
-    // Sort
     if (_sortOption == 'price_asc') {
       filtered.sort((a, b) => a.rentPrice.compareTo(b.rentPrice));
     } else if (_sortOption == 'price_desc') {
       filtered.sort((a, b) => b.rentPrice.compareTo(a.rentPrice));
-    } else {
-      // default: newest first (assume id or something, just keep original order)
     }
 
     setState(() {
@@ -227,7 +223,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                       Expanded(
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: 'Kuanzia',
+                            hintText: context.tr('Kuanzia', en: 'From'),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -248,7 +244,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                       Expanded(
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: 'Mpaka',
+                            hintText: context.tr('Mpaka', en: 'To'),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -318,7 +314,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: Colors.grey),
                           ),
-                          child: const Text('Weka Upya'),
+                          child: Text(context.tr('Weka Upya', en: 'Reset')),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -331,7 +327,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Theme.of(context).primaryColor,
                           ),
-                          child: const Text('Tumia'),
+                          child: Text(context.tr('Tumia', en: 'Apply')),
                         ),
                       ),
                     ],
@@ -388,14 +384,15 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
 
   // ==================== SHARE ====================
   Future<void> _shareHouse(RentalSpot spot) async {
-    // Use share package or simple clipboard
     final String message =
-        'Angalia nyumba hii: ${spot.name}\nBei: ${spot.formattedPrice}\nEneo: ${spot.getShortAddress()}';
-    // You can integrate share_plus package
-    // For now, copy to clipboard
+        'Angalia nyumba hii: ${spot.brandName}\n'
+        'Namba ya Nyumba: ${spot.houseNumber}\n'
+        'Bei: ${spot.formattedPrice}\n'
+        'Eneo: ${spot.getShortAddress()}';
     await Clipboard.setData(ClipboardData(text: message));
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Taarifa ya nyumba imenakiliwa!')),
+      SnackBar(content: Text(context.tr('Taarifa ya nyumba imenakiliwa!', en: 'House information copied!'))),
     );
   }
 
@@ -403,7 +400,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
   Future<void> _callLandlord(String phoneNumber) async {
     if (phoneNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Namba ya simu haipatikani')),
+        SnackBar(content: Text(context.tr('Namba ya simu haipatikani', en: 'Phone number is unavailable'))),
       );
       return;
     }
@@ -411,9 +408,10 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
     if (await canLaunchUrl(launchUri)) {
       await launchUrl(launchUri);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Haiwezi kupiga simu')));
+      ).showSnackBar(SnackBar(content: Text(context.tr('Haiwezi kupiga simu', en: 'Could not make a call'))));
     }
   }
 
@@ -453,7 +451,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Ghairi', style: TextStyle(color: Colors.grey)),
+            child: Text(context.tr('Ghairi', en: 'Cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           FilledButton(
             onPressed: () async {
@@ -466,7 +464,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text('Toka'),
+            child: Text(context.tr('Toka', en: 'Logout')),
           ),
         ],
       ),
@@ -501,7 +499,9 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
         color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         boxShadow: [
           BoxShadow(
-            color: (isDarkMode ? Colors.white : Colors.black).withOpacity(0.05),
+            color: (isDarkMode ? Colors.white : Colors.black).withValues(
+              alpha: 0.05,
+            ),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -592,7 +592,9 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                                     'Tafuta nyumba bora karibu nawe',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.white.withOpacity(0.9),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.9,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -600,7 +602,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                             ),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(30),
                               ),
                               child: IconButton(
@@ -753,7 +755,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                       IconButton(
                         icon: Icon(Icons.sort_by_alpha, color: primaryColor),
                         onPressed: _showFilterSortSheet,
-                        tooltip: 'Chuja na Panga',
+                        tooltip: context.tr('Chuja na Panga', en: 'Filter and Sort'),
                       ),
                     ],
                   ),
@@ -767,8 +769,11 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   if (index >=
-                      (_filteredHouses.length > 4 ? 4 : _filteredHouses.length))
+                      (_filteredHouses.length > 4
+                          ? 4
+                          : _filteredHouses.length)) {
                     return const SizedBox.shrink();
+                  }
                   return _buildVerticalHouseCard(
                     _filteredHouses[index],
                     isDarkMode,
@@ -831,8 +836,8 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-                0.05,
+              color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                alpha: 0.05,
               ),
               blurRadius: 8,
               offset: const Offset(0, 2),
@@ -855,7 +860,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                           height: 120,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(
+                          placeholder: (_, _) => Container(
                             height: 120,
                             color: isDarkMode
                                 ? Colors.grey[800]
@@ -866,7 +871,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                               ),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => Container(
+                          errorWidget: (_, _, _) => Container(
                             height: 120,
                             color: isDarkMode
                                 ? Colors.grey[800]
@@ -957,7 +962,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                spot.name,
+                spot.brandName, // jina maarufu
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1063,8 +1068,8 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-                0.03,
+              color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                alpha: 0.03,
               ),
               blurRadius: 6,
               offset: const Offset(0, 1),
@@ -1083,7 +1088,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                           width: 100,
                           height: 100,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(
+                          placeholder: (_, _) => Container(
                             width: 100,
                             height: 100,
                             color: isDarkMode
@@ -1095,7 +1100,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                               ),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => Container(
+                          errorWidget: (_, _, _) => Container(
                             width: 100,
                             height: 100,
                             color: isDarkMode
@@ -1152,7 +1157,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                       children: [
                         Expanded(
                           child: Text(
-                            spot.name,
+                            spot.brandName, // jina maarufu
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1322,8 +1327,8 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-                    0.03,
+                  color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                    alpha: 0.03,
                   ),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
@@ -1334,7 +1339,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
               children: [
                 CircleAvatar(
                   radius: 50,
-                  backgroundColor: primaryColor.withOpacity(0.1),
+                  backgroundColor: primaryColor.withValues(alpha: 0.1),
                   child: Icon(Icons.person, size: 50, color: primaryColor),
                 ),
                 const SizedBox(height: 12),
@@ -1361,7 +1366,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.1),
+                    color: primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -1382,8 +1387,8 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-                    0.03,
+                  color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                    alpha: 0.03,
                   ),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
@@ -1395,7 +1400,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.1),
+                    color: primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(Icons.home_work_outlined, color: primaryColor),
@@ -1470,7 +1475,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
             child: OutlinedButton.icon(
               onPressed: _showLogoutDialog,
               icon: const Icon(Icons.logout_rounded),
-              label: const Text('Toka Akaunti'),
+              label: Text(context.tr('Toka Akaunti', en: 'Logout')),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.red,
                 side: const BorderSide(color: Colors.red),
@@ -1495,7 +1500,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Nyumba Unazozipenda'),
+        title: Text(context.tr('Nyumba Unazozipenda', en: 'Favorite Houses')),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),
@@ -1554,7 +1559,7 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: primaryColor.withOpacity(0.1),
+            color: primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: primaryColor),
@@ -1582,3 +1587,5 @@ class _NormalUserHomepageState extends State<NormalUserHomepage> {
     );
   }
 }
+
+

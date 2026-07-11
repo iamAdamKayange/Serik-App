@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import '../services/csv_location_service.dart';
 
 class AdvancedLocationPicker extends StatefulWidget {
@@ -194,11 +195,16 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
           color: Colors.grey[50],
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Column(
+        child: Column(
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Inapakia data za mikoa...'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(
+              context.tr(
+                'Inapakia data za mikoa...',
+                en: 'Loading region data...',
+              ),
+            ),
           ],
         ),
       );
@@ -209,8 +215,8 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
       children: [
         // ========== MKOA (REGION) ==========
         _buildDropdown(
-          label: 'Mkoa',
-          hint: 'Chagua Mkoa',
+          label: context.tr('Mkoa', en: 'Region'),
+          hint: context.tr('Chagua Mkoa', en: 'Select Region'),
           icon: Icons.map_rounded,
           value: _selectedRegion,
           items: CsvLocationService.getRegions(),
@@ -242,8 +248,8 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
         // ========== WILAYA (DISTRICT) ==========
         if (_selectedRegion != null && _selectedRegion!.isNotEmpty)
           _buildDropdown(
-            label: 'Wilaya',
-            hint: 'Chagua Wilaya',
+            label: context.tr('Wilaya', en: 'District'),
+            hint: context.tr('Chagua Wilaya', en: 'Select District'),
             icon: Icons.location_city_rounded,
             value: _selectedDistrict,
             items: _availableDistricts,
@@ -275,8 +281,11 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
             _selectedDistrict!.isNotEmpty &&
             _availableDivisions.isNotEmpty)
           _buildDropdown(
-            label: 'Tarafa',
-            hint: 'Chagua Tarafa (Si lazima)',
+            label: context.tr('Tarafa', en: 'Division'),
+            hint: context.tr(
+              'Chagua Tarafa (Si lazima)',
+              en: 'Select Division (Optional)',
+            ),
             icon: Icons.merge_type_rounded,
             value: _selectedDivision,
             items: ['Hakuna Tarafa', ..._availableDivisions],
@@ -307,8 +316,8 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
             _selectedDistrict!.isNotEmpty &&
             _availableWards.isNotEmpty)
           _buildDropdown(
-            label: 'Kata / Shehia',
-            hint: 'Chagua Kata',
+            label: context.tr('Kata / Shehia', en: 'Ward / Shehia'),
+            hint: context.tr('Chagua Kata', en: 'Select Ward'),
             icon: Icons.streetview_rounded,
             value: _selectedWard,
             items: _availableWards,
@@ -338,8 +347,11 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
             children: [
               if (_availableVillages.isNotEmpty)
                 _buildDropdown(
-                  label: 'Kijiji',
-                  hint: 'Chagua Kijiji (Si lazima)',
+                  label: context.tr('Kijiji', en: 'Village'),
+                  hint: context.tr(
+                    'Chagua Kijiji (Si lazima)',
+                    en: 'Select Village (Optional)',
+                  ),
                   icon: FontAwesomeIcons.house,
                   value: _selectedVillage,
                   items: ['Hakuna Kijiji', ..._availableVillages],
@@ -369,8 +381,14 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
                   child: TextFormField(
                     controller: _manualVillageController,
                     decoration: InputDecoration(
-                      labelText: 'Jina la Kijiji (Jaza mwenyewe)',
-                      hintText: 'Mfano: Kijiji cha Kilimo',
+                      labelText: context.tr(
+                        'Jina la Kijiji (Jaza mwenyewe)',
+                        en: 'Village Name (Enter manually)',
+                      ),
+                      hintText: context.tr(
+                        'Mfano: Kijiji cha Kilimo',
+                        en: 'Example: Kilimo Village',
+                      ),
                       prefixIcon: FaIcon(
                         FontAwesomeIcons.locationDot,
                         color: const Color(0xFF2E7D32),
@@ -399,8 +417,8 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
             children: [
               if (_availableStreets.isNotEmpty)
                 _buildDropdown(
-                  label: 'Mtaa / Barabara',
-                  hint: 'Chagua Mtaa',
+                  label: context.tr('Mtaa / Barabara', en: 'Street / Road'),
+                  hint: context.tr('Chagua Mtaa', en: 'Select Street'),
                   icon: FontAwesomeIcons.road,
                   value: _selectedStreet,
                   items: _availableStreets,
@@ -425,8 +443,14 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
                   child: TextFormField(
                     controller: _manualStreetController,
                     decoration: InputDecoration(
-                      labelText: 'Jina la Mtaa / Barabara *',
-                      hintText: 'Mfano: Mtaa wa Uhuru, Barabara ya Kilimo',
+                      labelText: context.tr(
+                        'Jina la Mtaa / Barabara *',
+                        en: 'Street / Road Name *',
+                      ),
+                      hintText: context.tr(
+                        'Mfano: Mtaa wa Uhuru, Barabara ya Kilimo',
+                        en: 'Example: Uhuru Street, Kilimo Road',
+                      ),
                       prefixIcon: FaIcon(
                         FontAwesomeIcons.route,
                         color: Color(0xFF2E7D32),
@@ -436,7 +460,10 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
                       ),
                       filled: true,
                       fillColor: Colors.grey[50],
-                      helperText: '* Muhimu - Tafadhali weka jina la mtaa',
+                      helperText: context.tr(
+                        '* Muhimu - Tafadhali weka jina la mtaa',
+                        en: '* Required - Please enter the street name',
+                      ),
                     ),
                     onChanged: (value) {
                       _selectedStreet = value;
@@ -467,7 +494,7 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Anwani Kamili:',
+                        context.tr('Anwani Kamili:', en: 'Full Address:'),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -526,7 +553,7 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
             ),
             if (isOptional)
               Text(
-                ' (Si lazima)',
+                context.tr(' (Si lazima)', en: ' (Optional)'),
                 style: TextStyle(color: Colors.grey[500], fontSize: 12),
               ),
           ],
@@ -569,7 +596,10 @@ class _AdvancedLocationPickerState extends State<AdvancedLocationPicker> {
               fillColor: Colors.grey[50],
             ),
             items: [
-              DropdownMenuItem<T>(value: null, child: Text('-- $hint --')),
+              DropdownMenuItem<T>(
+                value: null,
+                child: Text(context.tr('-- $hint --', en: '-- $hint --')),
+              ),
               ...items.map((item) {
                 return DropdownMenuItem(
                   value: item,

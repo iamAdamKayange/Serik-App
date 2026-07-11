@@ -31,19 +31,19 @@ class ActionCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: isDark
-                ? [color.withOpacity(0.85), color.withOpacity(0.65)]
-                : [color, color.withOpacity(0.8)],
+                ? [color.withValues(alpha: 0.85), color.withValues(alpha: 0.65)]
+                : [color, color.withValues(alpha: 0.8)],
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: (isDark ? Colors.black : color).withOpacity(0.25),
+              color: (isDark ? Colors.black : color).withValues(alpha: 0.25),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
           border: isDark
-              ? Border.all(color: color.withOpacity(0.3), width: 1)
+              ? Border.all(color: color.withValues(alpha: 0.3), width: 1)
               : null,
         ),
         child: Column(
@@ -52,7 +52,7 @@ class ActionCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: Colors.white, size: 28),

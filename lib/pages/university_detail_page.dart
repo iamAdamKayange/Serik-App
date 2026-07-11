@@ -2,8 +2,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/model/rental_model.dart';
 import 'package:serkapp/model/house_data.dart';
+import 'package:serkapp/pages/login_page.dart';
+import 'package:serkapp/providers/auth_provider.dart';
 import 'package:serkapp/providers/theme_provider.dart';
 import 'package:serkapp/screen/rental_detail_screen.dart';
 import 'package:serkapp/services/api_services.dart';
@@ -147,9 +150,42 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
   }
 
   void _showRentalDetails(RentalSpot spot) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isLoggedIn) {
+      _showLoginPrompt();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => RentalDetailScreen(spot: spot)),
+    );
+  }
+
+  void _showLoginPrompt() {
+    final l10n = AppLocalizations.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.loginRequired),
+        content: Text(l10n.loginRequiredDetails),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.later),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+              );
+            },
+            icon: const Icon(Icons.login_rounded),
+            label: Text(l10n.signIn),
+          ),
+        ],
+      ),
     );
   }
 
@@ -253,6 +289,11 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
   }
 
   Widget _buildHouseCard(RentalSpot spot, int index) {
+    final isLoggedIn = Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).isLoggedIn;
+    final l10n = AppLocalizations.of(context);
     double uniLat = widget.university['lat']?.toDouble() ?? 0.0;
     double uniLng = widget.university['lng']?.toDouble() ?? 0.0;
     double distance = _calculateDistance(
@@ -350,7 +391,7 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        spot.name,
+                        isLoggedIn ? spot.brandName : l10n.houseNearCampus,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -372,7 +413,9 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              spot.getShortAddress(),
+                              isLoggedIn
+                                  ? spot.getShortAddress()
+                                  : l10n.hiddenLocation,
                               style: TextStyle(
                                 fontSize: 11,
                                 color: isDarkMode
@@ -415,7 +458,9 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              _getDistanceText(spot),
+                              isLoggedIn
+                                  ? _getDistanceText(spot)
+                                  : l10n.hiddenDistance,
                               style: TextStyle(
                                 fontSize: 10,
                                 color: distance < 1.0
@@ -431,22 +476,23 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                       Row(
                         children: [
                           Text(
-                            spot.formattedPrice,
+                            isLoggedIn ? spot.formattedPrice : l10n.hiddenPrice,
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
                               color: primaryColor,
                             ),
                           ),
-                          Text(
-                            '/mwezi',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDarkMode
-                                  ? Colors.grey[400]
-                                  : Colors.grey[600],
+                          if (isLoggedIn)
+                            Text(
+                              '/mwezi',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                              ),
                             ),
-                          ),
                           const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -454,15 +500,19 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: spot.status == 'Inapatikana'
-                                  ? Colors.green
-                                  : Colors.orange,
+                              color: !isLoggedIn
+                                  ? Colors.grey
+                                  : (spot.status == 'Inapatikana'
+                                        ? Colors.green
+                                        : Colors.orange),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              spot.status == 'Inapatikana'
-                                  ? 'Inapatikana'
-                                  : 'Imekodishwa',
+                              !isLoggedIn
+                                  ? l10n.loginStatus
+                                  : (spot.status == 'Inapatikana'
+                                        ? 'Inapatikana'
+                                        : 'Imekodishwa'),
                               style: const TextStyle(
                                 fontSize: 9,
                                 color: Colors.white,
@@ -481,6 +531,61 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
         ),
       ),
     );
+  }
+
+  // 🔥 Helper to build header image (supports both asset and network)
+  Widget _buildHeaderImage() {
+    final String? imagePath = widget.university['image'];
+    final bool isAsset = imagePath != null && imagePath.startsWith('assets/');
+
+    if (imagePath == null || imagePath.isEmpty) {
+      return Container(
+        width: double.infinity,
+        height: 200,
+        color: primaryColor.withValues(alpha: 0.2),
+        child: Center(
+          child: Icon(Icons.school_rounded, size: 80, color: primaryColor),
+        ),
+      );
+    }
+
+    if (isAsset) {
+      return Image.asset(
+        imagePath,
+        width: double.infinity,
+        height: 200,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Container(
+          width: double.infinity,
+          height: 200,
+          color: primaryColor.withValues(alpha: 0.2),
+          child: Center(
+            child: Icon(Icons.broken_image, size: 60, color: primaryColor),
+          ),
+        ),
+      );
+    } else {
+      return CachedNetworkImage(
+        imageUrl: imagePath,
+        width: double.infinity,
+        height: 200,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => Container(
+          width: double.infinity,
+          height: 200,
+          color: primaryColor.withValues(alpha: 0.1),
+          child: Center(child: CircularProgressIndicator(color: primaryColor)),
+        ),
+        errorWidget: (_, _, _) => Container(
+          width: double.infinity,
+          height: 200,
+          color: primaryColor.withValues(alpha: 0.2),
+          child: Center(
+            child: Icon(Icons.broken_image, size: 60, color: primaryColor),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -534,8 +639,8 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
               border: Border(bottom: BorderSide(color: borderColor)),
               boxShadow: [
                 BoxShadow(
-                  color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-                    0.02,
+                  color: (isDarkMode ? Colors.white : Colors.black).withValues(
+                    alpha: 0.02,
                   ),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
@@ -577,107 +682,105 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        image: widget.university['image'] != null
-                            ? DecorationImage(
-                                image: NetworkImage(widget.university['image']),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                        color: primaryColor,
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              isDarkMode
-                                  ? Colors.black.withOpacity(0.85)
-                                  : Colors.black.withOpacity(0.7),
-                            ],
-                          ),
-                        ),
-                        child: Align(
-                          alignment: Alignment.bottomLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.university['name'],
-                                  style: const TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.star,
-                                            size: 14,
-                                            color: Colors.white,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            widget.university['rating']
-                                                    ?.toString() ??
-                                                "4.5",
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: primaryColor,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Text(
-                                        "Radius: ${_currentRadius.toStringAsFixed(1)} km",
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                    // Header image (supports asset and network)
+                    Stack(
+                      children: [
+                        _buildHeaderImage(),
+                        Container(
+                          height: 200,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                isDarkMode
+                                    ? Colors.black.withValues(alpha: 0.85)
+                                    : Colors.black.withValues(alpha: 0.7),
                               ],
                             ),
                           ),
+                          child: Align(
+                            alignment: Alignment.bottomLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.university['name'],
+                                    style: const TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.star,
+                                              size: 14,
+                                              color: Colors.white,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              widget.university['rating']
+                                                      ?.toString() ??
+                                                  "4.5",
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: primaryColor,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          "Radius: ${_currentRadius.toStringAsFixed(1)} km",
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -693,7 +796,7 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                                 BoxShadow(
                                   color:
                                       (isDarkMode ? Colors.white : Colors.black)
-                                          .withOpacity(0.03),
+                                          .withValues(alpha: 0.03),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -707,7 +810,9 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: primaryColor.withOpacity(0.1),
+                                        color: primaryColor.withValues(
+                                          alpha: 0.1,
+                                        ),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Icon(
@@ -758,7 +863,7 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: primaryColor.withOpacity(0.1),
+                                  color: primaryColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
@@ -955,7 +1060,7 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, size: 20, color: color),
