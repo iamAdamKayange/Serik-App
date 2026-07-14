@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:serkapp/model/house_data.dart';
 import 'package:serkapp/model/rental_model.dart';
+import 'package:serkapp/pages/login_page.dart';
+import 'package:serkapp/providers/auth_provider.dart';
 import 'package:serkapp/screen/rental_detail_screen.dart';
 import 'package:serkapp/services/api_services.dart';
 
@@ -29,6 +32,25 @@ class AppNavigationService {
 
     final context = navigator.context;
     final messenger = ScaffoldMessenger.maybeOf(context);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isLoggedIn) {
+      final loggedIn = await navigator.push<bool>(
+        MaterialPageRoute(
+          builder: (_) => LoginPage(redirectTo: 'details', spotId: houseId),
+        ),
+      );
+      if (loggedIn == true) {
+        await openHouseFromNotification(payload);
+      } else {
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text('Ingia kwanza kuona taarifa kamili za nyumba.'),
+          ),
+        );
+      }
+      return;
+    }
+
     messenger?.showSnackBar(
       const SnackBar(content: Text('Inafungua nyumba...')),
     );
