@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -207,6 +208,15 @@ class ApiService {
     }
   }
 
+  static Future<void> _clearListCache(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    } catch (e) {
+      debugPrint('Cache clear failed for $key: $e');
+    }
+  }
+
   static void _refreshListCache({
     required String key,
     required Uri url,
@@ -233,7 +243,14 @@ class ApiService {
   // ==================== NOTIFICATIONS ====================
 
   static Future<List<dynamic>> getNotifications({int limit = 50}) async {
-    final url = Uri.parse('$baseUrl$apiPrefix/notifications?limit=$limit');
+    final fcmToken = await _readFcmToken();
+    final queryParameters = <String, String>{'limit': limit.toString()};
+    if (fcmToken != null) {
+      queryParameters['token'] = fcmToken;
+    }
+    final url = Uri.parse('$baseUrl$apiPrefix/notifications').replace(
+      queryParameters: queryParameters,
+    );
     final cached = await _readListCache(_notificationsCacheKey);
     if (cached != null) {
       _refreshListCache(key: _notificationsCacheKey, url: url);
@@ -255,6 +272,36 @@ class ApiService {
     }
   }
 
+  static Future<bool> deleteNotification(String notificationId) async {
+    try {
+      final fcmToken = await _readFcmToken();
+      if (fcmToken == null) return false;
+      final url = Uri.parse(
+        '$baseUrl$apiPrefix/notifications/$notificationId',
+      ).replace(queryParameters: {'token': fcmToken});
+      final response = await http.delete(url).timeout(timeout);
+      if (response.statusCode == 200) {
+        await _clearListCache(_notificationsCacheKey);
+        return true;
+      }
+      debugPrint('deleteNotification failed: ${response.statusCode}');
+      return false;
+    } catch (e) {
+      debugPrint('deleteNotification error: $e');
+      return false;
+    }
+  }
+
+  static Future<String?> _readFcmToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      return token == null || token.isEmpty ? null : token;
+    } catch (e) {
+      debugPrint('readFcmToken error: $e');
+      return null;
+    }
+  }
+
   static Future<void> registerDeviceToken({
     required String token,
     required String platform,
@@ -273,7 +320,7 @@ class ApiService {
       await http
           .post(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: await _getHeaders(),
             body: jsonEncode(body),
           )
           .timeout(timeout);
@@ -289,7 +336,9 @@ class ApiService {
       final url = Uri.parse(
         '$baseUrl$apiPrefix/notifications/preferences?token=${Uri.encodeQueryComponent(token)}',
       );
-      final response = await http.get(url).timeout(timeout);
+      final response = await http
+          .get(url, headers: await _getHeaders())
+          .timeout(timeout);
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
@@ -325,7 +374,7 @@ class ApiService {
       final response = await http
           .put(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: await _getHeaders(),
             body: jsonEncode(body),
           )
           .timeout(timeout);

@@ -50,6 +50,40 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return DateFormat('dd MMM, HH:mm').format(date.toLocal());
   }
 
+  Future<void> _openNotificationHouse({
+    required Map<String, dynamic> data,
+    required Object? houseId,
+  }) async {
+    if (houseId == null) return;
+    await AppNavigationService.openHouseFromNotification({
+      ...data,
+      'houseId': houseId,
+    });
+  }
+
+  Future<void> _deleteNotification(Object? notificationId) async {
+    if (notificationId == null) return;
+    final success = await ApiService.deleteNotification(
+      notificationId.toString(),
+    );
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'Imeshindikana kufuta notification.',
+              en: 'Could not delete notification.',
+            ),
+          ),
+        ),
+      );
+    }
+    setState(() {
+      _notificationsFuture = ApiService.getNotifications();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -139,56 +173,140 @@ class _NotificationScreenState extends State<NotificationScreen> {
             }
 
             return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 18),
               itemCount: notifications.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final item = notifications[index] as Map<String, dynamic>;
                 final data = item['data'] is Map<String, dynamic>
                     ? item['data'] as Map<String, dynamic>
                     : <String, dynamic>{};
                 final houseId = item['house_id'] ?? data['houseId'];
+                final canOpen = houseId != null;
 
-                return Container(
-                  decoration: BoxDecoration(
-                    color: colors.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: colors.outlineVariant),
+                return Dismissible(
+                  key: ValueKey(item['id']?.toString() ?? index.toString()),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      color: colors.error,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_rounded, color: Colors.white),
                   ),
-                  child: ListTile(
-                    onTap: houseId == null
-                        ? null
-                        : () {
-                            AppNavigationService.openHouseFromNotification({
-                              ...data,
-                              'houseId': houseId,
-                            });
-                          },
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
+                  onDismissed: (_) => _deleteNotification(item['id']),
+                  child: Material(
+                    color: colors.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: colors.outlineVariant),
                     ),
-                    leading: CircleAvatar(
-                      backgroundColor: colors.primary.withValues(alpha: 0.12),
-                      child: Icon(
-                        Icons.home_work_rounded,
-                        color: colors.primary,
-                      ),
-                    ),
-                    title: Text(
-                      item['title']?.toString() ?? '',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(item['body']?.toString() ?? ''),
-                    ),
-                    trailing: Text(
-                      _formatDate(item['created_at']),
-                      style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: canOpen
+                          ? () => _openNotificationHouse(
+                                data: data,
+                                houseId: houseId,
+                              )
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: colors.primary.withValues(alpha: 0.11),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.home_work_rounded,
+                                size: 19,
+                                color: colors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item['title']?.toString() ?? '',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _formatDate(item['created_at']),
+                                        style: TextStyle(
+                                          color: colors.onSurfaceVariant,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    item['body']?.toString() ?? '',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: colors.onSurfaceVariant,
+                                      fontSize: 12,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                  if (canOpen) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: () => _openNotificationHouse(
+                                          data: data,
+                                          houseId: houseId,
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          minimumSize: const Size(0, 30),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 0,
+                                          ),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.open_in_new_rounded,
+                                          size: 15,
+                                        ),
+                                        label: Text(
+                                          l10n.tr('Ona zaidi', en: 'View more'),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
