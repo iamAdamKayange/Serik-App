@@ -18,6 +18,8 @@ class ApiService {
   static const _housesCacheKey = 'api_cache_all_houses';
   static const _videoFeedCacheKey = 'api_cache_video_feed';
   static const _notificationsCacheKey = 'api_cache_notifications';
+  static const _notificationInstallCutoffKey =
+      'notification_install_cutoff_at';
 
   static Future<Map<String, String>> _getHeaders() async {
     final token = await _storage.read(key: 'auth_token');
@@ -248,14 +250,13 @@ class ApiService {
     if (fcmToken != null) {
       queryParameters['token'] = fcmToken;
     }
+    final installCutoffAt = await _readNotificationInstallCutoff();
+    if (installCutoffAt != null && installCutoffAt.isNotEmpty) {
+      queryParameters['installCutoffAt'] = installCutoffAt;
+    }
     final url = Uri.parse('$baseUrl$apiPrefix/notifications').replace(
       queryParameters: queryParameters,
     );
-    final cached = await _readListCache(_notificationsCacheKey);
-    if (cached != null) {
-      _refreshListCache(key: _notificationsCacheKey, url: url);
-      return cached;
-    }
 
     try {
       final response = await http.get(url).timeout(timeout);
@@ -265,10 +266,10 @@ class ApiService {
         return data;
       }
       debugPrint('getNotifications failed: ${response.statusCode}');
-      return [];
+      return await _readListCache(_notificationsCacheKey) ?? [];
     } catch (e) {
       debugPrint('getNotifications error: $e');
-      return [];
+      return await _readListCache(_notificationsCacheKey) ?? [];
     }
   }
 
@@ -302,11 +303,27 @@ class ApiService {
     }
   }
 
+  static Future<String?> _readNotificationInstallCutoff() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = prefs.getString(_notificationInstallCutoffKey);
+      if (existing != null && existing.isNotEmpty) return existing;
+
+      final now = DateTime.now().toUtc().toIso8601String();
+      await prefs.setString(_notificationInstallCutoffKey, now);
+      return now;
+    } catch (e) {
+      debugPrint('readNotificationInstallCutoff error: $e');
+      return null;
+    }
+  }
+
   static Future<void> registerDeviceToken({
     required String token,
     required String platform,
     String? appVersion,
     String? userId,
+    String? installCutoffAt,
   }) async {
     try {
       final url = Uri.parse('$baseUrl$apiPrefix/notifications/devices');
@@ -316,6 +333,7 @@ class ApiService {
       };
       if (appVersion != null) body['appVersion'] = appVersion;
       if (userId != null) body['userId'] = userId;
+      if (installCutoffAt != null) body['installCutoffAt'] = installCutoffAt;
 
       await http
           .post(
