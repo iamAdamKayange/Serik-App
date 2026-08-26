@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:serkapp/services/realtime_service.dart';
 
 class ApiService {
   static const String baseUrl = 'https://serkapp-backend.onrender.com';
@@ -18,8 +19,16 @@ class ApiService {
   static const _housesCacheKey = 'api_cache_all_houses';
   static const _videoFeedCacheKey = 'api_cache_video_feed';
   static const _notificationsCacheKey = 'api_cache_notifications';
+  static const _myHousesCacheKey = 'api_cache_my_houses';
+  static const _houseDetailCachePrefix = 'api_cache_house_';
+  static const _smartAlertPrefsPrefix = 'api_cache_smart_alert_';
   static const _notificationInstallCutoffKey =
       'notification_install_cutoff_at';
+
+  static String _houseDetailCacheKey(String id) => '$_houseDetailCachePrefix$id';
+
+  static String _smartAlertPrefsCacheKey(String token) =>
+      '$_smartAlertPrefsPrefix${token.hashCode}';
 
   static Future<Map<String, String>> _getHeaders() async {
     final token = await _storage.read(key: 'auth_token');
@@ -219,6 +228,37 @@ class ApiService {
     }
   }
 
+  static Future<void> _clearHouseCaches({String? houseId}) async {
+    await _clearListCache(_housesCacheKey);
+    await _clearListCache(_videoFeedCacheKey);
+    await _clearListCache(_myHousesCacheKey);
+    if (houseId != null && houseId.isNotEmpty) {
+      await _clearListCache(_houseDetailCacheKey(houseId));
+    }
+  }
+
+  static Future<Map<String, dynamic>?> _readMapCache(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (e) {
+      debugPrint('Map cache read failed for $key: $e');
+      return null;
+    }
+  }
+
+  static Future<void> _writeMapCache(String key, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, jsonEncode(data));
+    } catch (e) {
+      debugPrint('Map cache write failed for $key: $e');
+    }
+  }
+
   static void _refreshListCache({
     required String key,
     required Uri url,
@@ -283,6 +323,10 @@ class ApiService {
       final response = await http.delete(url).timeout(timeout);
       if (response.statusCode == 200) {
         await _clearListCache(_notificationsCacheKey);
+        RealtimeService.instance.emit('notification:changed', {
+          'action': 'deleted',
+          'notificationId': notificationId,
+        });
         return true;
       }
       debugPrint('deleteNotification failed: ${response.statusCode}');
@@ -350,6 +394,7 @@ class ApiService {
   static Future<Map<String, dynamic>?> getSmartAlertPreferences({
     required String token,
   }) async {
+    final cacheKey = _smartAlertPrefsCacheKey(token);
     try {
       final url = Uri.parse(
         '$baseUrl$apiPrefix/notifications/preferences?token=${Uri.encodeQueryComponent(token)}',
@@ -358,13 +403,15 @@ class ApiService {
           .get(url, headers: await _getHeaders())
           .timeout(timeout);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        await _writeMapCache(cacheKey, data);
+        return data;
       }
       debugPrint('getSmartAlertPreferences failed: ${response.statusCode}');
-      return null;
+      return await _readMapCache(cacheKey);
     } catch (e) {
       debugPrint('getSmartAlertPreferences error: $e');
-      return null;
+      return await _readMapCache(cacheKey);
     }
   }
 
@@ -396,7 +443,15 @@ class ApiService {
             body: jsonEncode(body),
           )
           .timeout(timeout);
-      return response.statusCode == 200;
+      final ok = response.statusCode == 200;
+      if (ok) {
+        await _writeMapCache(_smartAlertPrefsCacheKey(token), body);
+        RealtimeService.instance.emit('notification:changed', {
+          'action': 'preferences_updated',
+          'token': token,
+        });
+      }
+      return ok;
     } catch (e) {
       debugPrint('saveSmartAlertPreferences error: $e');
       return false;
@@ -461,16 +516,19 @@ class ApiService {
 
   /// Get single house by ID
   static Future<Map<String, dynamic>?> getHouseById(String id) async {
+    final cacheKey = _houseDetailCacheKey(id);
     try {
       final url = Uri.parse('$baseUrl$apiPrefix/houses/$id');
       final response = await http.get(url).timeout(timeout);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        await _writeMapCache(cacheKey, data);
+        return data;
       }
-      return null;
+      return await _readMapCache(cacheKey);
     } catch (e) {
       debugPrint('❌ getHouseById error: $e');
-      return null;
+      return await _readMapCache(cacheKey);
     }
   }
 
@@ -481,13 +539,15 @@ class ApiService {
       final headers = await _getHeaders();
       final response = await http.get(url, headers: headers).timeout(timeout);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body) as List<dynamic>;
+        await _writeListCache(_myHousesCacheKey, data);
+        return data;
       }
       debugPrint('❌ getMyHouses failed: ${response.statusCode}');
-      return [];
+      return await _readListCache(_myHousesCacheKey) ?? [];
     } catch (e) {
       debugPrint('❌ getMyHouses error: $e');
-      return [];
+      return await _readListCache(_myHousesCacheKey) ?? [];
     }
   }
 
@@ -504,7 +564,13 @@ class ApiService {
           .timeout(timeout);
       if (response.statusCode == 201) {
         debugPrint('✅ House created successfully');
-        return jsonDecode(response.body);
+        await _clearHouseCaches();
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        RealtimeService.instance.emit('house:changed', {
+          'action': 'created',
+          'houseId': data['id']?.toString(),
+        });
+        return data;
       } else {
         debugPrint('❌ Create house failed: ${response.statusCode}');
         return null;
@@ -527,7 +593,13 @@ class ApiService {
           .put(url, headers: headers, body: jsonEncode(updates))
           .timeout(timeout);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        await _clearHouseCaches(houseId: id);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        RealtimeService.instance.emit('house:changed', {
+          'action': 'updated',
+          'houseId': id,
+        });
+        return data;
       }
       return null;
     } catch (e) {
@@ -544,7 +616,15 @@ class ApiService {
       final response = await http
           .delete(url, headers: headers)
           .timeout(timeout);
-      return response.statusCode == 200;
+      final ok = response.statusCode == 200;
+      if (ok) {
+        await _clearHouseCaches(houseId: id);
+        RealtimeService.instance.emit('house:changed', {
+          'action': 'deleted',
+          'houseId': id,
+        });
+      }
+      return ok;
     } catch (e) {
       debugPrint('❌ deleteHouse error: $e');
       return false;

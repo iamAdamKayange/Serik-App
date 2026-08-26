@@ -168,9 +168,10 @@ class OnboardingScreen extends HookConsumerWidget {
                                   ],
                                 ),
                                 child: Center(
-                                  child: Text(
-                                    item['image'] as String,
-                                    style: const TextStyle(fontSize: 70),
+                                  child: Icon(
+                                    item['icon'] as IconData,
+                                    size: 72,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ),

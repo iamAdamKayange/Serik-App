@@ -207,9 +207,9 @@ class _AdminMapPageState extends State<AdminMapPage> {
     final Canvas canvas = Canvas(pictureRecorder);
     final Color markerColor = _getMarkerColor(type);
     final bool isAvailable = status == "Inapatikana";
-    const double width = 58;
-    const double height = 72;
-    const Offset center = Offset(width / 2, 24);
+    const double width = 44;
+    const double height = 56;
+    const Offset center = Offset(width / 2, 18);
 
     final Paint shadowPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.25)
@@ -217,17 +217,17 @@ class _AdminMapPageState extends State<AdminMapPage> {
 
     Path pinPath({double dx = 0, double dy = 0}) {
       return Path()
-        ..moveTo(width / 2 + dx, 68 + dy)
-        ..cubicTo(45 + dx, 52 + dy, 54 + dx, 41 + dy, 54 + dx, 25 + dy)
-        ..cubicTo(54 + dx, 10 + dy, 43 + dx, 1 + dy, 29 + dx, 1 + dy)
-        ..cubicTo(15 + dx, 1 + dy, 4 + dx, 10 + dy, 4 + dx, 25 + dy)
+        ..moveTo(width / 2 + dx, 52 + dy)
+        ..cubicTo(34 + dx, 40 + dy, 41 + dx, 31 + dy, 41 + dx, 19 + dy)
+        ..cubicTo(41 + dx, 8 + dy, 33 + dx, 1 + dy, 22 + dx, 1 + dy)
+        ..cubicTo(11 + dx, 1 + dy, 3 + dx, 8 + dy, 3 + dx, 19 + dy)
         ..cubicTo(
-          4 + dx,
-          41 + dy,
-          13 + dx,
-          52 + dy,
+          3 + dx,
+          31 + dy,
+          10 + dx,
+          40 + dy,
           width / 2 + dx,
-          68 + dy,
+          52 + dy,
         )
         ..close();
     }
@@ -242,24 +242,24 @@ class _AdminMapPageState extends State<AdminMapPage> {
         ..strokeWidth = 2,
     );
 
-    canvas.drawCircle(center, 10.5, Paint()..color = Colors.white);
-    canvas.drawCircle(center, 6.5, Paint()..color = markerColor);
+    canvas.drawCircle(center, 8.5, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 5.2, Paint()..color = markerColor);
     canvas.drawCircle(
-      const Offset(22, 15),
-      4.5,
+      const Offset(17, 11),
+      3.5,
       Paint()..color = Colors.white.withValues(alpha: 0.45),
     );
 
     final Paint statusPaint = Paint()
       ..color = isAvailable ? Colors.green : Colors.orange;
-    canvas.drawCircle(const Offset(43, 13), 5, statusPaint);
+    canvas.drawCircle(const Offset(33, 10), 4, statusPaint);
     canvas.drawCircle(
-      const Offset(43, 13),
-      5,
+      const Offset(33, 10),
+      4,
       Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 1.2,
     );
 
     final pricePainter = TextPainter(
@@ -269,13 +269,13 @@ class _AdminMapPageState extends State<AdminMapPage> {
     pricePainter.text = TextSpan(
       text: _abbreviatePrice(price),
       style: const TextStyle(
-        fontSize: 9.0,
+        fontSize: 7.5,
         color: Colors.white,
         fontWeight: FontWeight.w800,
       ),
     );
-    pricePainter.layout(minWidth: 0, maxWidth: width - 10);
-    pricePainter.paint(canvas, Offset((width - pricePainter.width) / 2, 42));
+    pricePainter.layout(minWidth: 0, maxWidth: width - 8);
+    pricePainter.paint(canvas, Offset((width - pricePainter.width) / 2, 32));
 
     /*
       final Paint starPaint = Paint()..color = const Color(0xFFFFD700);

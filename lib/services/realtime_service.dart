@@ -69,6 +69,11 @@ class RealtimeService {
     _socket?.on(event, callback);
   }
 
+  void emit(String event, [dynamic data]) {
+    connect();
+    _socket?.emit(event, data);
+  }
+
   void off(String event, [RealtimeCallback? callback]) {
     if (callback == null) {
       _socket?.off(event);

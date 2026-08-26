@@ -12,6 +12,7 @@ import 'package:serkapp/pages/university_detail_page.dart';
 import 'package:serkapp/pages/video_feed_page.dart';
 import 'package:serkapp/providers/auth_provider.dart';
 import 'package:serkapp/services/api_services.dart';
+import 'package:serkapp/services/realtime_service.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
@@ -115,6 +116,7 @@ class _HomePageState extends State<HomePage>
   bool _isListening = false;
   String _selectedFilter = 'all';
   late AnimationController _animationController;
+  late final RealtimeCallback _houseChangeListener;
 
   int _currentIndex = 0;
 
@@ -124,6 +126,11 @@ class _HomePageState extends State<HomePage>
     _filteredUniversities = List.from(universities);
     _initializeSpeech();
     _loadUniversityHouseCounts();
+    _houseChangeListener = (_) {
+      if (!mounted) return;
+      _loadUniversityHouseCounts();
+    };
+    RealtimeService.instance.on('house:changed', _houseChangeListener);
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
@@ -396,15 +403,67 @@ class _HomePageState extends State<HomePage>
                           ],
                         ),
                       ),
-                      IconButton.filledTonal(
-                        onPressed: () => themeProvider.toggleTheme(),
-                        icon: Icon(
-                          isDarkMode
-                              ? Icons.light_mode_rounded
-                              : Icons.dark_mode_rounded,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        color: primaryColor,
-                        tooltip: l10n.switchTheme,
+                        child: PopupMenuButton<String>(
+                          icon: Icon(
+                            Icons.more_vert_rounded,
+                            color: primaryColor,
+                          ),
+                          onSelected: (value) {
+                            switch (value) {
+                              case 'theme':
+                                themeProvider.toggleTheme();
+                                break;
+                              case 'language':
+                                themeProvider.toggleLanguage();
+                                break;
+                              case 'account':
+                                setState(() => _currentIndex = 4);
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'theme',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isDarkMode
+                                        ? Icons.light_mode_rounded
+                                        : Icons.dark_mode_rounded,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(l10n.switchTheme),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'language',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.translate_rounded, size: 20),
+                                  const SizedBox(width: 10),
+                                  Text(l10n.language),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'account',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.person_rounded, size: 20),
+                                  const SizedBox(width: 10),
+                                  Text(l10n.account),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -742,14 +801,6 @@ class _HomePageState extends State<HomePage>
           () => setState(() => _currentIndex = 2),
         ),
         const SizedBox(width: 10),
-        _quickAction(
-          Icons.person_rounded,
-          l10n.openAccount,
-          Colors.deepPurple,
-          surfaceColor,
-          isDarkMode,
-          () => setState(() => _currentIndex = 3),
-        ),
       ],
     );
   }
@@ -1367,6 +1418,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
+    RealtimeService.instance.off('house:changed', _houseChangeListener);
     _searchController.dispose();
     _speech.stop();
     _animationController.dispose();

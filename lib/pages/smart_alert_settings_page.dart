@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:serkapp/l10n/app_localization.dart';
+import 'package:serkapp/pages/login_page.dart';
+import 'package:serkapp/providers/auth_provider.dart';
 import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/services/notification_service.dart';
 
@@ -46,7 +49,16 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
   }
 
   Future<void> _loadPreferences() async {
-    final token = await NotificationService.instance.getDeviceToken();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isLoggedIn) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
+
+    final token = await NotificationService.instance.syncDeviceToken(
+      userId: authProvider.userId,
+    );
     if (!mounted) return;
     if (token == null) {
       setState(() {
@@ -72,8 +84,9 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
   }
 
   Future<void> _save() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final token = _token;
-    if (token == null || _saving) return;
+    if (!authProvider.isLoggedIn || token == null || _saving) return;
 
     setState(() => _saving = true);
     final ok = await ApiService.saveSmartAlertPreferences(
@@ -123,13 +136,14 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).colorScheme;
+    final isLoggedIn = context.watch<AuthProvider>().isLoggedIn;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.tr('Smart alerts', en: 'Smart alerts')),
         actions: [
           TextButton(
-            onPressed: _saving || _loading ? null : _save,
+            onPressed: !isLoggedIn || _saving || _loading ? null : _save,
             child: _saving
                 ? const SizedBox(
                     width: 18,
@@ -142,7 +156,9 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _token == null
+          : !isLoggedIn
+              ? _LoginRequiredState(colors: colors)
+              : _token == null
               ? _MissingTokenState(colors: colors)
               : ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -243,6 +259,62 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+class _LoginRequiredState extends StatelessWidget {
+  const _LoginRequiredState({required this.colors});
+
+  final ColorScheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.lock_outline_rounded,
+              size: 54,
+              color: colors.primary,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.tr(
+                'Ingia kwenye akaunti kuweka alert za bei na eneo.',
+                en: 'Sign in to create price and location alerts.',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.tr(
+                'Ukiwa hujasajiliwa bado utaendelea kupata reminders za kawaida.',
+                en: 'Guests can still receive regular reminders.',
+              ),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                );
+              },
+              icon: const Icon(Icons.login_rounded),
+              label: Text(l10n.tr('Ingia', en: 'Sign in')),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

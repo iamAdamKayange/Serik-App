@@ -20,12 +20,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
   void initState() {
     super.initState();
     _notificationsFuture = ApiService.getNotifications();
-    RealtimeService.instance.on('house:created', _handleRealtimeNotification);
+    RealtimeService.instance.on('house:changed', _handleRealtimeNotification);
+    RealtimeService.instance.on(
+      'notification:changed',
+      _handleRealtimeNotification,
+    );
   }
 
   @override
   void dispose() {
-    RealtimeService.instance.off('house:created', _handleRealtimeNotification);
+    RealtimeService.instance.off('house:changed', _handleRealtimeNotification);
+    RealtimeService.instance.off(
+      'notification:changed',
+      _handleRealtimeNotification,
+    );
     super.dispose();
   }
 
@@ -93,17 +101,45 @@ class _NotificationScreenState extends State<NotificationScreen> {
       appBar: AppBar(
         title: Text(l10n.tr('Arifa', en: 'Notifications')),
         actions: [
-          IconButton(
-            tooltip: l10n.tr('Smart alerts', en: 'Smart alerts'),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SmartAlertSettingsPage(),
-                ),
-              );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (value) {
+              switch (value) {
+                case 'alerts':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SmartAlertSettingsPage(),
+                    ),
+                  );
+                  break;
+                case 'refresh':
+                  _refresh();
+                  break;
+              }
             },
-            icon: const Icon(Icons.tune_rounded),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'alerts',
+                child: Row(
+                  children: [
+                    const Icon(Icons.tune_rounded, size: 20),
+                    const SizedBox(width: 10),
+                    Text(l10n.tr('Smart alerts', en: 'Smart alerts')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: [
+                    const Icon(Icons.refresh_rounded, size: 20),
+                    const SizedBox(width: 10),
+                    Text(l10n.tr('Refresh', en: 'Refresh')),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

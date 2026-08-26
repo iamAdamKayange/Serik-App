@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/pages/login_page.dart';
 import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/providers/theme_provider.dart';
+import 'package:serkapp/widgets/custom_dialogs.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -96,8 +96,15 @@ class _RegisterPageState extends State<RegisterPage> {
       debugPrint('📦 Register response: $result');
 
       if (result != null && mounted) {
-        // 🔥 Show success dialog with Lottie tick.json instead of SnackBar
-        await _showSuccessDialog();
+        CustomDialogs.showSuccess(
+          context,
+          context.tr(
+            'Usajili umefanikiwa. Sasa ingia kwenye akaunti yako.',
+            en: 'Registration successful. Please sign in to your account.',
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+        if (!mounted) return;
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -129,64 +136,6 @@ class _RegisterPageState extends State<RegisterPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  // 🔥 New: Show success dialog with tick.json animation
-  Future<void> _showSuccessDialog() async {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: surfaceColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: const EdgeInsets.all(24),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Lottie.asset(
-              "assets/animations/tick.json",
-              height: 120,
-              width: 120,
-              repeat: false,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              context.tr('Usajili Umefanikiwa!', en: 'Registration Successful!'),
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr(
-                'Tafadhali ingia kwenye akaunti yako.',
-                en: 'Please sign in to your account.',
-              ),
-              style: TextStyle(fontSize: 14, color: hintTextColor),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context); // close dialog
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                context.tr('Endelea Kuingia', en: 'Continue to Login'),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -229,13 +178,69 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Animation
+                  // Hero
                   Center(
-                    child: SizedBox(
-                      height: 150,
-                      child: Lottie.asset(
-                        "assets/animations/register.json",
-                        fit: BoxFit.contain,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0.92, end: 1),
+                      duration: const Duration(milliseconds: 700),
+                      curve: Curves.easeOutBack,
+                      builder: (context, value, child) {
+                        return Transform.scale(scale: value, child: child);
+                      },
+                      child: Container(
+                        width: 168,
+                        height: 168,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: gradientColors,
+                          ),
+                          borderRadius: BorderRadius.circular(36),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 22,
+                              right: 22,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.verified_user_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(22),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.person_add_alt_1_rounded,
+                                size: 72,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -490,22 +495,30 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget _buildRoleChip(String label, String value) {
     final bool isSelected = _selectedRole == value;
 
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRole = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected
-                  ? Colors.white
-                  : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+    return Material(
+      color: isSelected ? primaryColor : roleBgColor,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: () => setState(() => _selectedRole = value),
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? primaryColor : borderColor,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected
+                    ? Colors.white
+                    : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              ),
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -12,8 +13,10 @@ import 'package:provider/provider.dart';
 import 'package:serkapp/model/house_data.dart';
 import 'package:serkapp/pages/login_page.dart';
 import 'package:serkapp/services/api_services.dart';
+import 'package:serkapp/services/network_status_service.dart';
 import 'package:serkapp/widgets/advanced_location_picker.dart';
 import '../providers/theme_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_compress/video_compress.dart';
 
 class HouseRegistrationForm extends StatefulWidget {
@@ -31,7 +34,10 @@ class HouseRegistrationForm extends StatefulWidget {
 }
 
 class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
+  static const String _draftStorageKey = 'house_registration_draft_v1';
   final _formKey = GlobalKey<FormState>();
+  Timer? _draftSaveDebounce;
+  bool _restoringDraft = false;
 
   // Controllers
   final TextEditingController _brandNameController = TextEditingController();
@@ -60,6 +66,164 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     super.initState();
     if (widget.existingHouse != null) {
       _loadHouseDataForEdit(widget.existingHouse!);
+    } else {
+      _restoreDraft();
+    }
+  }
+
+  void _scheduleDraftSave() {
+    if (widget.existingHouse != null || _restoringDraft) return;
+    _draftSaveDebounce?.cancel();
+    _draftSaveDebounce = Timer(const Duration(milliseconds: 600), _saveDraft);
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      _restoringDraft = true;
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftStorageKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      if (!mounted) return;
+
+      setState(() {
+        _brandNameController.text = data['brandName']?.toString() ?? '';
+        _houseNameController.text = data['houseName']?.toString() ?? '';
+        _houseNumberController.text = data['houseNumber']?.toString() ?? '';
+        _phoneController.text = data['phone']?.toString() ?? '';
+        _altPhoneController.text = data['altPhone']?.toString() ?? '';
+        _rentPriceController.text = data['rentPrice']?.toString() ?? '';
+        _depositController.text = data['deposit']?.toString() ?? '';
+        _locationDescriptionController.text =
+            data['locationDescription']?.toString() ?? '';
+        _nearbyAmenitiesController.text =
+            data['nearbyAmenities']?.toString() ?? '';
+        _descriptionController.text = data['description']?.toString() ?? '';
+        _customBedroomController.text =
+            data['customBedrooms']?.toString() ?? '';
+        _selectedHouseType =
+            data['selectedHouseType']?.toString() ?? _selectedHouseType;
+        _selectedBedrooms =
+            int.tryParse(data['selectedBedrooms']?.toString() ?? '') ??
+            _selectedBedrooms;
+        _useCustomBedrooms = data['useCustomBedrooms'] == true;
+        _hasCeiling = data['hasCeiling'] == true;
+        _hasAluminium = data['hasAluminium'] == true;
+        _hasCeilingBoard = data['hasCeilingBoard'] == true;
+        _hasTiles = data['hasTiles'] == true;
+        _hasFence = data['hasFence'] == true;
+        _isSelfContainer = data['isSelfContainer'] != false;
+        _hasPrivateBathroom = data['hasPrivateBathroom'] != false;
+        _hasPrivateToilet = data['hasPrivateToilet'] != false;
+        _hasPrivateKitchen = data['hasPrivateKitchen'] != false;
+        _isSharedBathroom = data['isSharedBathroom'] == true;
+        _isSharedToilet = data['isSharedToilet'] == true;
+        _isSharedKitchen = data['isSharedKitchen'] == true;
+        _waterIncluded = data['waterIncluded'] == true;
+        _electricityIncluded = data['electricityIncluded'] == true;
+        _internetIncluded = data['internetIncluded'] == true;
+        _selectedRegion = data['region']?.toString() ?? '';
+        _selectedDistrict = data['district']?.toString() ?? '';
+        _selectedDivision = data['division']?.toString() ?? '';
+        _selectedWard = data['ward']?.toString() ?? '';
+        _selectedVillage = data['village']?.toString() ?? '';
+        _selectedStreet = data['street']?.toString() ?? '';
+
+        final location = data['selectedLocation'];
+        if (location is Map<String, dynamic>) {
+          final lat = (location['lat'] as num?)?.toDouble();
+          final lng = (location['lng'] as num?)?.toDouble();
+          if (lat != null && lng != null) {
+            _selectedLocation = gmap.LatLng(lat, lng);
+          }
+        }
+
+        final imagePaths = (data['selectedImages'] as List?)?.cast<String>() ?? [];
+        final videoPaths = (data['selectedVideos'] as List?)?.cast<String>() ?? [];
+        _selectedImages
+          ..clear()
+          ..addAll(
+            imagePaths.where((path) => File(path).existsSync()).map(
+                  (path) => XFile(path),
+                ),
+          );
+        _selectedVideos
+          ..clear()
+          ..addAll(
+            videoPaths.where((path) => File(path).existsSync()).map(
+                  (path) => XFile(path),
+                ),
+          );
+      });
+    } catch (e) {
+      debugPrint('Draft restore failed: $e');
+    } finally {
+      _restoringDraft = false;
+    }
+  }
+
+  Future<void> _saveDraft() async {
+    if (widget.existingHouse != null || _restoringDraft) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = <String, dynamic>{
+        'brandName': _brandNameController.text,
+        'houseName': _houseNameController.text,
+        'houseNumber': _houseNumberController.text,
+        'phone': _phoneController.text,
+        'altPhone': _altPhoneController.text,
+        'rentPrice': _rentPriceController.text,
+        'deposit': _depositController.text,
+        'locationDescription': _locationDescriptionController.text,
+        'nearbyAmenities': _nearbyAmenitiesController.text,
+        'description': _descriptionController.text,
+        'customBedrooms': _customBedroomController.text,
+        'selectedHouseType': _selectedHouseType,
+        'selectedBedrooms': _selectedBedrooms,
+        'useCustomBedrooms': _useCustomBedrooms,
+        'hasCeiling': _hasCeiling,
+        'hasAluminium': _hasAluminium,
+        'hasCeilingBoard': _hasCeilingBoard,
+        'hasTiles': _hasTiles,
+        'hasFence': _hasFence,
+        'isSelfContainer': _isSelfContainer,
+        'hasPrivateBathroom': _hasPrivateBathroom,
+        'hasPrivateToilet': _hasPrivateToilet,
+        'hasPrivateKitchen': _hasPrivateKitchen,
+        'isSharedBathroom': _isSharedBathroom,
+        'isSharedToilet': _isSharedToilet,
+        'isSharedKitchen': _isSharedKitchen,
+        'waterIncluded': _waterIncluded,
+        'electricityIncluded': _electricityIncluded,
+        'internetIncluded': _internetIncluded,
+        'region': _selectedRegion,
+        'district': _selectedDistrict,
+        'division': _selectedDivision,
+        'ward': _selectedWard,
+        'village': _selectedVillage,
+        'street': _selectedStreet,
+        'selectedLocation': _selectedLocation == null
+            ? null
+            : {
+                'lat': _selectedLocation!.latitude,
+                'lng': _selectedLocation!.longitude,
+              },
+        'selectedImages': _selectedImages.map((file) => file.path).toList(),
+        'selectedVideos': _selectedVideos.map((file) => file.path).toList(),
+      };
+      await prefs.setString(_draftStorageKey, jsonEncode(draft));
+    } catch (e) {
+      debugPrint('Draft save failed: $e');
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftStorageKey);
+    } catch (e) {
+      debugPrint('Draft clear failed: $e');
     }
   }
 
@@ -446,6 +610,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 controller: _brandNameController,
                 label: 'Jina Maarufu',
                 icon: Icons.home_rounded,
+                onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka jina maarufu la nyumba";
@@ -458,6 +623,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 controller: _houseNameController,
                 label: 'Jina la Mwenye Nyumba',
                 icon: Icons.apartment_rounded,
+                onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka jina mwenye nyumba";
@@ -470,6 +636,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 controller: _houseNumberController,
                 label: 'Namba ya Nyumba',
                 icon: Icons.numbers_rounded,
+                onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka namba ya nyumba";
@@ -483,6 +650,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 label: 'Namba ya Simu',
                 icon: Icons.phone_rounded,
                 keyboardType: TextInputType.phone,
+                onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Tafadhali weka namba yako ya simu";
@@ -499,6 +667,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 label: 'Namba Mbadala ya Simu (Si lazima)',
                 icon: Icons.phone_iphone_rounded,
                 keyboardType: TextInputType.phone,
+                onChanged: (_) => _scheduleDraftSave(),
               ),
             ],
           ),
@@ -513,10 +682,12 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       style: TextStyle(fontSize: 15, color: textColor),
       decoration: InputDecoration(
         labelText: label,
@@ -595,6 +766,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                     setState(() {
                       _selectedHouseType = newValue!;
                     });
+                    _scheduleDraftSave();
                   },
                   items: _houseTypes.map<DropdownMenuItem<String>>((
                     String value,
@@ -654,6 +826,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                                 _customBedroomController.clear();
                               }
                             });
+                            _scheduleDraftSave();
                           },
                           selectedColor: primaryColor,
                           backgroundColor: inputFillColor,
@@ -679,6 +852,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                                   7;
                             }
                           });
+                          _scheduleDraftSave();
                         },
                         selectedColor: primaryColor,
                         backgroundColor: inputFillColor,
@@ -730,6 +904,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                         if (value.isNotEmpty) {
                           _selectedBedrooms = int.tryParse(value) ?? 7;
                         }
+                        _scheduleDraftSave();
                       },
                     ),
                   ],
@@ -1632,18 +1807,20 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         return _formKey.currentState!.validate();
       case 1:
         if (_useCustomBedrooms && _customBedroomController.text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali weka idadi ya vyumba")),
+          _showFeedback(
+            "Tafadhali weka idadi ya vyumba",
+            isError: true,
+            icon: Icons.warning_rounded,
           );
           return false;
         }
         if (_useCustomBedrooms) {
           final customValue = int.tryParse(_customBedroomController.text);
           if (customValue == null || customValue < 1) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Tafadhali weka idadi sahihi ya vyumba"),
-              ),
+            _showFeedback(
+              "Tafadhali weka idadi sahihi ya vyumba",
+              isError: true,
+              icon: Icons.warning_rounded,
             );
             return false;
           }
@@ -1651,48 +1828,60 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         return true;
       case 2:
         if (_selectedImages.length < 3) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali pakia angalau picha tatu")),
+          _showFeedback(
+            "Tafadhali pakia angalau picha tatu",
+            isError: true,
+            icon: Icons.photo_library_outlined,
           );
           return false;
         }
         return true;
       case 3:
         if (_rentPriceController.text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali weka bei ya kukodisha")),
+          _showFeedback(
+            "Tafadhali weka bei ya kukodisha",
+            isError: true,
+            icon: Icons.payments_outlined,
           );
           return false;
         }
         if (_selectedRegion.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali chagua Mkoa")),
+          _showFeedback(
+            "Tafadhali chagua Mkoa",
+            isError: true,
+            icon: Icons.location_city_outlined,
           );
           return false;
         }
         if (_selectedDistrict.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali chagua Wilaya")),
+          _showFeedback(
+            "Tafadhali chagua Wilaya",
+            isError: true,
+            icon: Icons.map_outlined,
           );
           return false;
         }
         if (_selectedWard.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali chagua Kata")),
+          _showFeedback(
+            "Tafadhali chagua Kata",
+            isError: true,
+            icon: Icons.place_outlined,
           );
           return false;
         }
         if (_selectedStreet.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tafadhali weka jina la Mtaa")),
+          _showFeedback(
+            "Tafadhali weka jina la Mtaa",
+            isError: true,
+            icon: Icons.edit_location_alt_outlined,
           );
           return false;
         }
         if (_selectedLocation == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Tafadhali chagua eneo la nyumba kwenye ramani"),
-            ),
+          _showFeedback(
+            "Tafadhali chagua eneo la nyumba kwenye ramani",
+            isError: true,
+            icon: Icons.map_rounded,
           );
           return false;
         }
@@ -1713,9 +1902,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Hitilafu ya kupakua picha: $e")));
+      _showFeedback(
+        "Hitilafu ya kupakua picha: $e",
+        isError: true,
+        icon: Icons.photo_library_outlined,
+      );
     }
   }
 
@@ -1727,8 +1918,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         if (!mounted) return;
         final sizeInMB = sizeInBytes / (1024 * 1024);
         if (sizeInMB > 50) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video haipaswi kuzidi MB 50')),
+          _showFeedback(
+            'Video haipaswi kuzidi MB 50',
+            isError: true,
+            icon: Icons.videocam_off_rounded,
           );
           return;
         }
@@ -1738,9 +1931,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Hitilafu kuchagua video: $e')));
+      _showFeedback(
+        'Hitilafu kuchagua video: $e',
+        isError: true,
+        icon: Icons.video_collection_rounded,
+      );
     }
   }
 
@@ -1755,8 +1950,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Huduma ya eneo haijawezeshwa")),
+        _showFeedback(
+          "Huduma ya eneo haijawezeshwa",
+          isError: true,
+          icon: Icons.location_off_rounded,
         );
         return;
       }
@@ -1766,8 +1963,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Ruhusa ya eneo imekataliwa")),
+          _showFeedback(
+            "Ruhusa ya eneo imekataliwa",
+            isError: true,
+            icon: Icons.location_off_rounded,
           );
           return;
         }
@@ -1775,8 +1974,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
 
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ruhusa ya eneo imekataliwa kabisa")),
+        _showFeedback(
+          "Ruhusa ya eneo imekataliwa kabisa",
+          isError: true,
+          icon: Icons.location_off_rounded,
         );
         return;
       }
@@ -1791,9 +1992,11 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       _selectLocation(location);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Hitilafu ya kupata eneo: $e")));
+      _showFeedback(
+        "Hitilafu ya kupata eneo: $e",
+        isError: true,
+        icon: Icons.location_searching_rounded,
+      );
     }
   }
 
@@ -1803,6 +2006,37 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       _locationAddress =
           "${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}";
     });
+  }
+
+  void _showFeedback(
+    String message, {
+    bool isError = false,
+    IconData icon = Icons.info_outline_rounded,
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: isError ? const Color(0xFFD32F2F) : primaryColor,
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ==================== VIDEO THUMBNAIL GENERATION ====================
@@ -1856,10 +2090,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     if (!isValid) {
       await ApiService.logout();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tafadhali ingia tena kama Mwenye Nyumba.'),
-          ),
+        _showFeedback(
+          'Tafadhali ingia tena kama Mwenye Nyumba.',
+          isError: true,
+          icon: Icons.login_rounded,
         );
         Navigator.pushReplacement(
           context,
@@ -1958,12 +2192,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         final successMsg = isEditing
             ? "Nyumba imerekebishwa!"
             : "Nyumba imesajiliwa!";
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ $successMsg'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showFeedback(successMsg, icon: Icons.check_circle_rounded);
         Navigator.pop(context, true);
         if (widget.onHouseAdded != null) {
           widget.onHouseAdded!(null);
@@ -1976,8 +2205,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     } catch (e) {
       debugPrint('❌ Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hitilafu: $e'), backgroundColor: Colors.red),
+        _showFeedback(
+          'Hitilafu: $e',
+          isError: true,
+          icon: Icons.error_outline_rounded,
         );
       }
     } finally {

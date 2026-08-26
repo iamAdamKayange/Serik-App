@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:serkapp/l10n/app_localization.dart';
 import 'package:serkapp/pages/home_page.dart';
 import 'package:serkapp/pages/register_page.dart';
 import 'package:serkapp/pages/rental_home_page.dart';
 import 'package:serkapp/services/api_services.dart';
+import 'package:serkapp/services/notification_service.dart';
 import 'package:serkapp/providers/auth_provider.dart';
 import 'package:serkapp/providers/theme_provider.dart';
+import 'package:serkapp/widgets/custom_dialogs.dart';
 
 class LoginPage extends StatefulWidget {
   final String? redirectTo;
@@ -83,12 +84,20 @@ class _LoginPageState extends State<LoginPage> {
           token: result['token'],
           phone: phone,
         );
+        await NotificationService.instance.syncDeviceToken(userId: userId);
 
         debugPrint('✅ User logged in: $fullName');
         debugPrint('🎭 Role: $userRole');
 
-        // 🔥 Show success dialog with auto-close
-        await _showSuccessDialogWithAutoClose();
+        CustomDialogs.showSuccess(
+          context,
+          context.tr(
+            'Kuingia kumefanikiwa!',
+            en: 'Login successful!',
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        if (!mounted) return;
 
         if (mounted) {
           if (widget.redirectTo == 'details' && widget.spotId != null) {
@@ -125,58 +134,6 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     if (mounted) setState(() => _isLoading = false);
-  }
-
-  // 🔥 Dialog inajifungia yenyewe baada ya sekunde 1.5
-  Future<void> _showSuccessDialogWithAutoClose() async {
-    // Onyesha dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha:0.5),
-      builder: (context) => AlertDialog(
-        backgroundColor: surfaceColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: const EdgeInsets.all(24),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Lottie.asset(
-              "assets/animations/completed.json",
-              height: 120,
-              width: 120,
-              repeat: false,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              context.tr('Kuingia kumefanikiwa!', en: 'Login successful!'),
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.tr(
-                'Unaelekezwa kwenye dashibodi yako...',
-                en: 'Redirecting to your dashboard...',
-              ),
-              style: TextStyle(fontSize: 14, color: hintTextColor),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    // 🔥 Baada ya sekunde 1.5, funga dialog
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (mounted) {
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-    }
   }
 
   void _navigateToHomePage(String role) {
@@ -233,11 +190,67 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 20),
 
                   Center(
-                    child: SizedBox(
-                      height: 180,
-                      child: Lottie.asset(
-                        "assets/animations/login1.json",
-                        fit: BoxFit.contain,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0.92, end: 1),
+                      duration: const Duration(milliseconds: 700),
+                      curve: Curves.easeOutBack,
+                      builder: (context, value, child) {
+                        return Transform.scale(scale: value, child: child);
+                      },
+                      child: Container(
+                        width: 168,
+                        height: 168,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: gradientColors,
+                          ),
+                          borderRadius: BorderRadius.circular(36),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 22,
+                              right: 22,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.lock_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(22),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.home_rounded,
+                                size: 72,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

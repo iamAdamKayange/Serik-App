@@ -19,6 +19,7 @@ import 'package:serkapp/services/api_services.dart';
 import 'package:serkapp/providers/auth_provider.dart';
 import 'package:serkapp/providers/theme_provider.dart';
 import 'package:serkapp/pages/login_page.dart';
+import 'package:serkapp/services/realtime_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Maeneo ya vyuo – yanaweza kubadilishwa kuwa dynamic kutoka API (kwa sasa ni static)
@@ -48,6 +49,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
   bool _isLoading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  late final RealtimeCallback _houseChangeListener;
 
   double _minPrice = 0;
   double _maxPrice = 1000000;
@@ -123,6 +125,11 @@ class _CustomMapPageState extends State<CustomMapPage> {
     super.initState();
     _determinePosition();
     _loadRentalSpotsFromAPI();
+    _houseChangeListener = (_) {
+      if (!mounted) return;
+      _loadRentalSpotsFromAPI();
+    };
+    RealtimeService.instance.on('house:changed', _houseChangeListener);
     if (widget.selectedUniversity != null) {
       _selectedUniversity = widget.selectedUniversity!;
     }
@@ -370,9 +377,9 @@ class _CustomMapPageState extends State<CustomMapPage> {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
     final Color markerColor = _getMarkerColor(type);
-    const double width = 58;
-    const double height = 72;
-    const Offset center = Offset(width / 2, 24);
+    const double width = 44;
+    const double height = 56;
+    const Offset center = Offset(width / 2, 18);
 
     final Paint shadowPaint = Paint()
       ..color = Colors.black.withAlpha(72)
@@ -380,17 +387,17 @@ class _CustomMapPageState extends State<CustomMapPage> {
 
     Path pinPath({double dx = 0, double dy = 0}) {
       return Path()
-        ..moveTo(width / 2 + dx, 68 + dy)
-        ..cubicTo(45 + dx, 52 + dy, 54 + dx, 41 + dy, 54 + dx, 25 + dy)
-        ..cubicTo(54 + dx, 10 + dy, 43 + dx, 1 + dy, 29 + dx, 1 + dy)
-        ..cubicTo(15 + dx, 1 + dy, 4 + dx, 10 + dy, 4 + dx, 25 + dy)
+        ..moveTo(width / 2 + dx, 52 + dy)
+        ..cubicTo(34 + dx, 40 + dy, 41 + dx, 31 + dy, 41 + dx, 19 + dy)
+        ..cubicTo(41 + dx, 8 + dy, 33 + dx, 1 + dy, 22 + dx, 1 + dy)
+        ..cubicTo(11 + dx, 1 + dy, 3 + dx, 8 + dy, 3 + dx, 19 + dy)
         ..cubicTo(
-          4 + dx,
-          41 + dy,
-          13 + dx,
-          52 + dy,
+          3 + dx,
+          31 + dy,
+          10 + dx,
+          40 + dy,
           width / 2 + dx,
-          68 + dy,
+          52 + dy,
         )
         ..close();
     }
@@ -405,11 +412,11 @@ class _CustomMapPageState extends State<CustomMapPage> {
         ..strokeWidth = 2,
     );
 
-    canvas.drawCircle(center, 10.5, Paint()..color = Colors.white);
-    canvas.drawCircle(center, 6.5, Paint()..color = markerColor);
+    canvas.drawCircle(center, 8.5, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 5.2, Paint()..color = markerColor);
     canvas.drawCircle(
-      const Offset(22, 15),
-      4.5,
+      const Offset(17, 11),
+      3.5,
       Paint()..color = Colors.white.withAlpha(115),
     );
 
@@ -420,12 +427,12 @@ class _CustomMapPageState extends State<CustomMapPage> {
     iconPainter.text = TextSpan(
       text: _getPropertyIcon(type),
       style: const TextStyle(
-        fontSize: 8.0,
+        fontSize: 6.5,
         color: Colors.white,
         fontWeight: FontWeight.bold,
       ),
     );
-    iconPainter.layout(minWidth: 0, maxWidth: 16);
+    iconPainter.layout(minWidth: 0, maxWidth: 12);
     iconPainter.paint(
       canvas,
       Offset(
@@ -441,15 +448,15 @@ class _CustomMapPageState extends State<CustomMapPage> {
     pricePainter.text = TextSpan(
       text: _abbreviatePrice(price),
       style: const TextStyle(
-        fontSize: 9.0,
+        fontSize: 7.5,
         color: Colors.white,
         fontWeight: FontWeight.w800,
       ),
     );
-    pricePainter.layout(minWidth: 0, maxWidth: width - 10);
+    pricePainter.layout(minWidth: 0, maxWidth: width - 8);
     pricePainter.paint(
       canvas,
-      Offset((width - pricePainter.width) / 2, 42),
+      Offset((width - pricePainter.width) / 2, 32),
     );
 
     final img = await pictureRecorder.endRecording().toImage(
@@ -1773,18 +1780,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       onPressed: _clearSearch,
                       tooltip: context.tr('Futa utafutaji', en: 'Clear search'),
                     ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 1,
-                    height: 24,
-                    color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: Icon(Icons.filter_list_rounded, color: primaryColor),
-                    onPressed: _showFiltersBottomSheet,
-                    tooltip: context.tr('Chuja', en: 'Filter'),
-                  ),
                 ],
               ),
             ),
@@ -1861,49 +1856,76 @@ class _CustomMapPageState extends State<CustomMapPage> {
                 ),
               ),
             ),
-          // My Location
           Positioned(
             bottom: 100,
             right: 16,
-            child: FloatingActionButton(
-              onPressed: _determinePosition,
-              backgroundColor: searchBarBg,
-              foregroundColor: primaryColor,
-              elevation: 4,
-              child: const Icon(Icons.my_location_rounded),
-            ),
-          ),
-          // Refresh
-          Positioned(
-            bottom: 170,
-            right: 16,
-            child: FloatingActionButton(
-              onPressed: _refreshMarkers,
-              backgroundColor: searchBarBg,
-              foregroundColor: primaryColor,
-              elevation: 4,
-              mini: true,
-              child: const Icon(Icons.refresh_rounded),
-            ),
-          ),
-          // Reset Filters
-          if ((_selectedType != 'Zote' ||
-              _minPrice > 0 ||
-              _maxPrice < 1000000 ||
-              _selectedUniversity != 'Zote' ||
-              _searchQuery.isNotEmpty))
-            Positioned(
-              bottom: 240,
-              right: 16,
-              child: FloatingActionButton(
-                onPressed: _resetFilters,
-                backgroundColor: searchBarBg,
-                foregroundColor: Colors.orange,
-                elevation: 4,
-                mini: true,
-                child: const Icon(Icons.clear_all_rounded),
+            child: Container(
+              decoration: BoxDecoration(
+                color: searchBarBg,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert_rounded, color: primaryColor),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'location':
+                      _determinePosition();
+                      break;
+                    case 'refresh':
+                      _refreshMarkers();
+                      break;
+                    case 'reset':
+                      _resetFilters();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'location',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.my_location_rounded, size: 20),
+                        const SizedBox(width: 10),
+                        Text(context.tr('Eneo langu', en: 'My location')),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'refresh',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.refresh_rounded, size: 20),
+                        const SizedBox(width: 10),
+                        Text(context.tr('Pakia upya', en: 'Refresh')),
+                      ],
+                    ),
+                  ),
+                  if ((_selectedType != 'Zote' ||
+                      _minPrice > 0 ||
+                      _maxPrice < 1000000 ||
+                      _selectedUniversity != 'Zote' ||
+                      _searchQuery.isNotEmpty))
+                    PopupMenuItem(
+                      value: 'reset',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.clear_all_rounded, size: 20),
+                          const SizedBox(width: 10),
+                          Text(context.tr('Weka upya', en: 'Reset')),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
+          ),
 
           // Retry button when no houses and not loading (network error)
           if (!_isLoading && _rentalSpots.isEmpty && _markers.isEmpty)
@@ -2033,6 +2055,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
 
   @override
   void dispose() {
+    RealtimeService.instance.off('house:changed', _houseChangeListener);
     _searchController.dispose();
     super.dispose();
   }
