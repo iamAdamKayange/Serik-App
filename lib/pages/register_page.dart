@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/pages/login_page.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/providers/theme_provider.dart';
-import 'package:serkapp/widgets/custom_dialogs.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/pages/login_page.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/providers/theme_provider.dart';
+import 'package:serik/widgets/custom_dialogs.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});

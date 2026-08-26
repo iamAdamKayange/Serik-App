@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:serkapp/services/api_services.dart';
+import 'package:serik/services/api_services.dart';
 
 class PaymentService {
   // Chaguzi za malipo

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serkapp/providers/auth_provider.dart';
+import 'package:serik/providers/auth_provider.dart';
 
 void main() {
   test('AuthProvider tracks login and logout state', () {

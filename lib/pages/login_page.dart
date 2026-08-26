@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/pages/home_page.dart';
-import 'package:serkapp/pages/register_page.dart';
-import 'package:serkapp/pages/rental_home_page.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/services/notification_service.dart';
-import 'package:serkapp/providers/auth_provider.dart';
-import 'package:serkapp/providers/theme_provider.dart';
-import 'package:serkapp/widgets/custom_dialogs.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/pages/home_page.dart';
+import 'package:serik/pages/register_page.dart';
+import 'package:serik/pages/rental_home_page.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/services/notification_service.dart';
+import 'package:serik/providers/auth_provider.dart';
+import 'package:serik/providers/theme_provider.dart';
+import 'package:serik/widgets/custom_dialogs.dart';
 
 class LoginPage extends StatefulWidget {
   final String? redirectTo;

@@ -10,11 +10,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmap;
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/model/house_data.dart';
-import 'package:serkapp/pages/login_page.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/services/network_status_service.dart';
-import 'package:serkapp/widgets/advanced_location_picker.dart';
+import 'package:serik/model/house_data.dart';
+import 'package:serik/pages/login_page.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/widgets/advanced_location_picker.dart';
 import '../providers/theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_compress/video_compress.dart';
@@ -139,21 +138,23 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
           }
         }
 
-        final imagePaths = (data['selectedImages'] as List?)?.cast<String>() ?? [];
-        final videoPaths = (data['selectedVideos'] as List?)?.cast<String>() ?? [];
+        final imagePaths =
+            (data['selectedImages'] as List?)?.cast<String>() ?? [];
+        final videoPaths =
+            (data['selectedVideos'] as List?)?.cast<String>() ?? [];
         _selectedImages
           ..clear()
           ..addAll(
-            imagePaths.where((path) => File(path).existsSync()).map(
-                  (path) => XFile(path),
-                ),
+            imagePaths
+                .where((path) => File(path).existsSync())
+                .map((path) => XFile(path)),
           );
         _selectedVideos
           ..clear()
           ..addAll(
-            videoPaths.where((path) => File(path).existsSync()).map(
-                  (path) => XFile(path),
-                ),
+            videoPaths
+                .where((path) => File(path).existsSync())
+                .map((path) => XFile(path)),
           );
       });
     } catch (e) {
@@ -218,6 +219,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _clearDraft() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -2177,6 +2179,29 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       setState(() {});
 
       final houseData = _buildHouseData(imageUrls, videoUrls, videoThumbnails);
+
+      // Check verification status for new house creation
+      if (!isEditing) {
+        try {
+          final verificationStatus = await ApiService.getVerificationStatus();
+          if (verificationStatus != null && verificationStatus['canPublish'] != true) {
+            _showFeedback(
+              "Lazima uwe verified kama mwenye nyumba kabla ya kuweka nyumba.",
+              icon: Icons.warning_rounded,
+              isError: true,
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint('Error checking verification status: $e');
+          _showFeedback(
+            "Hitilafu kubadilisha status ya verification.",
+            icon: Icons.error_rounded,
+            isError: true,
+          );
+          return;
+        }
+      }
 
       dynamic result;
       if (isEditing) {

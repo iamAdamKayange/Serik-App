@@ -6,12 +6,254 @@ import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import '../model/rental_model.dart';
 import '../providers/theme_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/saved_house_button.dart';
+import '../pages/login_page.dart';
 
-class RentalDetailScreen extends StatelessWidget {
+class RentalDetailScreen extends StatefulWidget {
   final RentalSpot spot;
 
   const RentalDetailScreen({super.key, required this.spot});
+
+  @override
+  State<RentalDetailScreen> createState() => _RentalDetailScreenState();
+}
+
+class _RentalDetailScreenState extends State<RentalDetailScreen> {
+  // ignore: unused_field
+  int _selectedImageIndex = 0;
+  // ignore: unused_field
+  final PageController _imagePageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Check authentication when screen is accessed
+    _checkAuthentication();
+  }
+
+  void _checkAuthentication() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+      });
+    }
+  }
+
+  void _showLandlordContactModal(
+    BuildContext context,
+    bool isDark,
+    Color primaryColor,
+  ) {
+    String ownerName = widget.spot.ownerName.trim();
+    if (ownerName.isEmpty) ownerName = "Mwenye Nyumba";
+    String ownerPhone = widget.spot.phone.trim();
+    if (ownerPhone.isEmpty) ownerPhone = "Hajabainishwa";
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+        final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+        final subtextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.contact_phone_rounded,
+                      color: primaryColor,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mawasiliano na Mwenye Nyumba',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: textColor,
+                          ),
+                        ),
+                        Text(
+                          widget.spot.brandName.isNotEmpty
+                              ? widget.spot.brandName
+                              : 'Nyumba ya Kupanga',
+                          style: TextStyle(fontSize: 13, color: subtextColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Landlord Info Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF282828)
+                      : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF3C3C3C)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: primaryColor.withValues(alpha: 0.15),
+                          child: Text(
+                            ownerName.isNotEmpty
+                                ? ownerName[0].toUpperCase()
+                                : 'M',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ownerName,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: textColor,
+                                ),
+                              ),
+                              Text(
+                                ownerPhone,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: subtextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () async {
+                              if (widget.spot.phone.isNotEmpty) {
+                                final uri = Uri.parse(
+                                  'tel:${widget.spot.phone}',
+                                );
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri);
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.call, size: 18),
+                            label: const Text('Piga Simu'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () async {
+                              if (widget.spot.phone.isNotEmpty) {
+                                final cleanPhone = widget.spot.phone.replaceAll(
+                                  RegExp(r'[^0-9]'),
+                                  '',
+                                );
+                                final uri = Uri.parse(
+                                  'https://wa.me/$cleanPhone?text=Habari, naulizia kuhusu ${widget.spot.brandName}',
+                                );
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri);
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.chat, size: 18),
+                            label: const Text('WhatsApp'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   void _showFullScreenImage(
     BuildContext context,
@@ -120,13 +362,13 @@ class RentalDetailScreen extends StatelessWidget {
         : primaryColor.withValues(alpha: 0.05);
 
     // Prepare owner name and phone using new fields
-    String ownerName = spot.ownerName.trim();
+    String ownerName = widget.spot.ownerName.trim();
     if (ownerName.isEmpty) ownerName = "Mwenye Nyumba";
-    String ownerPhone = spot.phone.trim();
+    String ownerPhone = widget.spot.phone.trim();
     if (ownerPhone.isEmpty) ownerPhone = "Hajabainishwa";
-    String brandName = spot.brandName.trim();
+    String brandName = widget.spot.brandName.trim();
     if (brandName.isEmpty) brandName = "Nyumba";
-    String houseNumber = spot.houseNumber.trim();
+    String houseNumber = widget.spot.houseNumber.trim();
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -143,9 +385,7 @@ class RentalDetailScreen extends StatelessWidget {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          SavedHouseButton(houseId: spot.id),
-        ],
+        actions: [SavedHouseButton(houseId: widget.spot.id)],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -153,16 +393,16 @@ class RentalDetailScreen extends StatelessWidget {
           children: [
             // Header Image
             GestureDetector(
-              onTap: spot.hasImages()
-                  ? () => _showFullScreenImage(context, spot.images, 0)
+              onTap: widget.spot.hasImages()
+                  ? () => _showFullScreenImage(context, widget.spot.images, 0)
                   : null,
               child: Container(
                 height: 280,
                 width: double.infinity,
                 color: isDark ? Colors.grey[900] : Colors.grey[200],
-                child: spot.hasImages()
+                child: widget.spot.hasImages()
                     ? CachedNetworkImage(
-                        imageUrl: spot.images[0],
+                        imageUrl: widget.spot.images[0],
                         fit: BoxFit.cover,
                         width: double.infinity,
                         placeholder: (_, _) => Center(
@@ -213,7 +453,7 @@ class RentalDetailScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          spot.type,
+                          widget.spot.type,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -270,7 +510,7 @@ class RentalDetailScreen extends StatelessWidget {
 
                   // Address Card
                   _buildAddressCard(
-                    spot,
+                    widget.spot,
                     isDark,
                     primaryColor,
                     subtextColor,
@@ -282,7 +522,7 @@ class RentalDetailScreen extends StatelessWidget {
 
                   // Price Card
                   _buildPriceCard(
-                    spot,
+                    widget.spot,
                     isDark,
                     primaryColor,
                     textColor,
@@ -295,7 +535,7 @@ class RentalDetailScreen extends StatelessWidget {
 
                   // Features Card
                   _buildFeaturesCard(
-                    spot,
+                    widget.spot,
                     isDark,
                     primaryColor,
                     subtextColor,
@@ -307,7 +547,7 @@ class RentalDetailScreen extends StatelessWidget {
 
                   // Description Card
                   _buildDescriptionCard(
-                    spot,
+                    widget.spot,
                     isDark,
                     textColor,
                     subtextColor,
@@ -319,9 +559,9 @@ class RentalDetailScreen extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // Nearby Amenities
-                  if (spot.getNearbyAmenitiesList().isNotEmpty)
+                  if (widget.spot.getNearbyAmenitiesList().isNotEmpty)
                     _buildAmenitiesCard(
-                      spot,
+                      widget.spot,
                       isDark,
                       primaryColor,
                       subtextColor,
@@ -330,9 +570,9 @@ class RentalDetailScreen extends StatelessWidget {
                     ),
 
                   // Video Section
-                  if (spot.videos.isNotEmpty)
+                  if (widget.spot.videos.isNotEmpty)
                     _buildVideoSection(
-                      spot,
+                      widget.spot,
                       isDark,
                       primaryColor,
                       subtextColor,
@@ -341,9 +581,9 @@ class RentalDetailScreen extends StatelessWidget {
                     ),
 
                   // Image Gallery
-                  if (spot.hasImages())
+                  if (widget.spot.hasImages())
                     _buildImageGallery(
-                      spot,
+                      widget.spot,
                       isDark,
                       primaryColor,
                       borderColor,
@@ -364,7 +604,7 @@ class RentalDetailScreen extends StatelessWidget {
     );
   }
 
-  // ---------- Cards (same as before but using spot.ownerName etc.) ----------
+  // ---------- Cards (same as before but using widget.spot.ownerName etc.) ----------
 
   Widget _buildOwnerCard(
     String ownerName,
@@ -1403,8 +1643,8 @@ class RentalDetailScreen extends StatelessWidget {
               Colors.green,
               isDark,
               () async {
-                if (spot.phone.isNotEmpty) {
-                  final uri = Uri.parse('tel:${spot.phone}');
+                if (widget.spot.phone.isNotEmpty) {
+                  final uri = Uri.parse('tel:${widget.spot.phone}');
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 } else {
                   _showErrorSnackBar(context, 'Hakuna namba ya simu');
@@ -1412,22 +1652,24 @@ class RentalDetailScreen extends StatelessWidget {
               },
               primaryColor,
             ),
-            _actionButton(Icons.message, "SMS", Colors.blue, isDark, () async {
-              if (spot.phone.isNotEmpty) {
-                final uri = Uri.parse('sms:${spot.phone}');
-                if (await canLaunchUrl(uri)) await launchUrl(uri);
-              } else {
-                _showErrorSnackBar(context, 'Hakuna namba ya simu');
-              }
-            }, primaryColor),
+            _actionButton(
+              Icons.visibility,
+              "Tazama Zaidi",
+              Colors.green,
+              isDark,
+              () {
+                _showLandlordContactModal(context, isDark, primaryColor);
+              },
+              primaryColor,
+            ),
             _actionButton(
               Icons.directions,
               "Eneo",
               Colors.orange,
               isDark,
               () async {
-                if (spot.hasValidLocation()) {
-                  final uri = Uri.parse(spot.getDirectionsUrl());
+                if (widget.spot.hasValidLocation()) {
+                  final uri = Uri.parse(widget.spot.getDirectionsUrl());
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 } else {
                   _showErrorSnackBar(context, 'Hakuna eneo la nyumba');
@@ -1441,7 +1683,7 @@ class RentalDetailScreen extends StatelessWidget {
               Colors.teal,
               isDark,
               () async {
-                final text = spot.getWhatsAppShareText();
+                final text = widget.spot.getWhatsAppShareText();
                 final uri = Uri.parse(
                   'https://wa.me/?text=${Uri.encodeComponent(text)}',
                 );

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/pages/home_page.dart';
-import 'package:serkapp/providers/theme_provider.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/pages/home_page.dart';
+import 'package:serik/providers/theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends HookConsumerWidget {

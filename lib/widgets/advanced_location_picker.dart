@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:serkapp/l10n/app_localization.dart';
+import 'package:serik/l10n/app_localization.dart';
 import '../services/csv_location_service.dart';
 
 class AdvancedLocationPicker extends StatefulWidget {

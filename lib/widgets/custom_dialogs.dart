@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:serkapp/l10n/app_localization.dart';
+import 'package:serik/l10n/app_localization.dart';
 
 class CustomDialogs {
   static void showSuccess(BuildContext context, String message) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/services/notification_service.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/services/notification_service.dart';
 
 class SavedHouseButton extends StatefulWidget {
   const SavedHouseButton({super.key, required this.houseId});

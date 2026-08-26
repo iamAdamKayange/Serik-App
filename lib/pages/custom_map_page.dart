@@ -10,16 +10,16 @@ import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart' hide Marker;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/model/house_data.dart';
-import 'package:serkapp/model/rental_model.dart';
-import 'package:serkapp/pages/register_page.dart';
-import 'package:serkapp/screen/rental_detail_screen.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/providers/auth_provider.dart';
-import 'package:serkapp/providers/theme_provider.dart';
-import 'package:serkapp/pages/login_page.dart';
-import 'package:serkapp/services/realtime_service.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/model/house_data.dart';
+import 'package:serik/model/rental_model.dart';
+import 'package:serik/pages/register_page.dart';
+import 'package:serik/screen/rental_detail_screen.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/providers/auth_provider.dart';
+import 'package:serik/providers/theme_provider.dart';
+import 'package:serik/pages/login_page.dart';
+import 'package:serik/services/realtime_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Maeneo ya vyuo – yanaweza kubadilishwa kuwa dynamic kutoka API (kwa sasa ni static)
@@ -55,16 +55,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
   double _maxPrice = 1000000;
   String _selectedType = 'Zote';
   String _selectedUniversity = 'Zote';
-  final List<String> _propertyTypes = [
-    'Zote',
-    'Nyumba ya Kawaida',
-    'Apartment',
-    'Studio',
-    'Mansion',
-    'Hostel',
-    'Ghorofa',
-    'Biashara',
-  ];
 
   List<RentalSpot> _rentalSpots = []; // data halisi kutoka API
 
@@ -363,7 +353,9 @@ class _CustomMapPageState extends State<CustomMapPage> {
                 _refreshMarkers();
               },
               icon: const Icon(Icons.filter_alt),
-              label: Text(context.tr('Onyesha Nyumba Karibu', en: 'Show Nearby Houses')),
+              label: Text(
+                context.tr('Onyesha Nyumba Karibu', en: 'Show Nearby Houses'),
+              ),
               style: FilledButton.styleFrom(backgroundColor: primaryColor),
             ),
           ],
@@ -391,14 +383,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
         ..cubicTo(34 + dx, 40 + dy, 41 + dx, 31 + dy, 41 + dx, 19 + dy)
         ..cubicTo(41 + dx, 8 + dy, 33 + dx, 1 + dy, 22 + dx, 1 + dy)
         ..cubicTo(11 + dx, 1 + dy, 3 + dx, 8 + dy, 3 + dx, 19 + dy)
-        ..cubicTo(
-          3 + dx,
-          31 + dy,
-          10 + dx,
-          40 + dy,
-          width / 2 + dx,
-          52 + dy,
-        )
+        ..cubicTo(3 + dx, 31 + dy, 10 + dx, 40 + dy, width / 2 + dx, 52 + dy)
         ..close();
     }
 
@@ -454,10 +439,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
       ),
     );
     pricePainter.layout(minWidth: 0, maxWidth: width - 8);
-    pricePainter.paint(
-      canvas,
-      Offset((width - pricePainter.width) / 2, 32),
-    );
+    pricePainter.paint(canvas, Offset((width - pricePainter.width) / 2, 32));
 
     final img = await pictureRecorder.endRecording().toImage(
       width.toInt(),
@@ -516,253 +498,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
   }
 
   // ---------- Filter bottom sheet (same as original) ----------
-  void _showFiltersBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateBottomSheet) => Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.close_rounded, color: subtextColor),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Chagua Vigezo',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: primaryColor,
-                      ),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () {
-                        setState(() => _resetFilters());
-                        Navigator.pop(context);
-                      },
-                      child: Text(
-                        'Sawazisha',
-                        style: TextStyle(color: primaryColor),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Chagua Chuo Karibu',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: isDarkMode
-                              ? Colors.grey[800]
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButton<String>(
-                          value: _selectedUniversity,
-                          isExpanded: true,
-                          underline: const SizedBox(),
-                          dropdownColor: surfaceColor,
-                          style: TextStyle(color: textColor),
-                          items:
-                              [
-                                    'Zote',
-                                    ...universities.map(
-                                      (u) => u['name'] as String,
-                                    ),
-                                  ]
-                                  .map(
-                                    (String value) => DropdownMenuItem(
-                                      value: value,
-                                      child: Text(value),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (newValue) => setStateBottomSheet(
-                            () => _selectedUniversity = newValue!,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Bei',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      RangeSlider(
-                        values: RangeValues(_minPrice, _maxPrice),
-                        min: 0,
-                        max: 2000000,
-                        divisions: 20,
-                        labels: RangeLabels(
-                          'TZS ${_minPrice.toInt()}',
-                          'TZS ${_maxPrice.toInt()}',
-                        ),
-                        onChanged: (values) => setStateBottomSheet(() {
-                          _minPrice = values.start;
-                          _maxPrice = values.end;
-                        }),
-                        activeColor: primaryColor,
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'TZS ${_minPrice.toInt()}',
-                            style: TextStyle(color: subtextColor),
-                          ),
-                          Text(
-                            'TZS ${_maxPrice.toInt()}',
-                            style: TextStyle(color: subtextColor),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      Text(
-                        'Aina ya Nyumba',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _propertyTypes.map((type) {
-                          final isSelected = _selectedType == type;
-                          return ChoiceChip(
-                            label: Text(
-                              type,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : textColor,
-                              ),
-                            ),
-                            selected: isSelected,
-                            onSelected: (_) =>
-                                setStateBottomSheet(() => _selectedType = type),
-                            selectedColor: primaryColor,
-                            backgroundColor: isDarkMode
-                                ? Colors.grey[800]
-                                : Colors.grey[100],
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 32),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDarkMode
-                              ? Colors.green[900]
-                              : Colors.green[50],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: isDarkMode
-                                  ? Colors.green[300]
-                                  : Colors.green[700],
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Nyumba ${_markers.length} zimepatikana',
-                                style: TextStyle(
-                                  color: isDarkMode
-                                      ? Colors.green[300]
-                                      : Colors.green[800],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: FilledButton(
-                          onPressed: () {
-                            _refreshMarkers();
-                            Navigator.pop(context);
-                          },
-                          style: FilledButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text(
-                            'Tumia Vigezo',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ---------- Property Bottom Sheet (imebadilishwa kidogo kuonyesha data halisi) ----------
   void _showPropertyBottomSheet(RentalSpot spot) {
@@ -1290,7 +1025,12 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                 _navigateToFullDetails(spot);
                               },
                               icon: const Icon(Icons.info_outline_rounded),
-                              label: Text(context.tr('Maelezo Kamili', en: 'Full Details')),
+                              label: Text(
+                                context.tr(
+                                  'Maelezo Kamili',
+                                  en: 'Full Details',
+                                ),
+                              ),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: primaryColor,
                                 side: BorderSide(color: primaryColor),
@@ -1370,7 +1110,12 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                   _showLoginDialog(spot);
                                 },
                                 icon: const Icon(Icons.login_rounded),
-                                label: Text(context.tr('Ingia Ili Kuona Zaidi', en: 'Sign in to See More')),
+                                label: Text(
+                                  context.tr(
+                                    'Ingia Ili Kuona Zaidi',
+                                    en: 'Sign in to See More',
+                                  ),
+                                ),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: primaryColor,
                                   shape: RoundedRectangleBorder(
@@ -1543,7 +1288,9 @@ class _CustomMapPageState extends State<CustomMapPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            child: Text(context.tr('Ingia Sasa', en: 'Sign in Now')),
+                            child: Text(
+                              context.tr('Ingia Sasa', en: 'Sign in Now'),
+                            ),
                           ),
                         ),
                       ],
@@ -1593,11 +1340,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
     );
   }
 
-  Widget _buildLockedPreviewCard(
-    IconData icon,
-    String title,
-    String subtitle,
-  ) {
+  Widget _buildLockedPreviewCard(IconData icon, String title, String subtitle) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -1653,7 +1396,14 @@ class _CustomMapPageState extends State<CustomMapPage> {
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('Haikuweza kufungua video.', en: 'Could not open video.'))),
+        SnackBar(
+          content: Text(
+            context.tr(
+              'Haikuweza kufungua video.',
+              en: 'Could not open video.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -1765,7 +1515,10 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       controller: _searchController,
                       style: TextStyle(color: textColor),
                       decoration: InputDecoration(
-                        hintText: context.tr('Tafuta nyumba, eneo, bei...', en: 'Search houses, area, price...'),
+                        hintText: context.tr(
+                          'Tafuta nyumba, eneo, bei...',
+                          en: 'Search houses, area, price...',
+                        ),
                         border: InputBorder.none,
                         hintStyle: TextStyle(
                           color: isDarkMode ? Colors.grey[500] : Colors.grey,
@@ -2060,5 +1813,3 @@ class _CustomMapPageState extends State<CustomMapPage> {
     super.dispose();
   }
 }
-
-

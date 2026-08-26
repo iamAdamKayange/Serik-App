@@ -6,10 +6,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/model/house_data.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/pages/house_registration_page.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/model/house_data.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/pages/house_registration_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/theme_provider.dart';
 

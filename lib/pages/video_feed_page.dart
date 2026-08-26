@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/model/rental_model.dart';
-import 'package:serkapp/pages/login_page.dart';
-import 'package:serkapp/providers/auth_provider.dart';
-import 'package:serkapp/providers/theme_provider.dart';
-import 'package:serkapp/screen/rental_detail_screen.dart';
-import 'package:serkapp/services/api_services.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/model/rental_model.dart';
+import 'package:serik/pages/login_page.dart';
+import 'package:serik/providers/auth_provider.dart';
+import 'package:serik/providers/theme_provider.dart';
+import 'package:serik/screen/rental_detail_screen.dart';
+import 'package:serik/services/api_services.dart';
 import 'package:video_player/video_player.dart';
 
 /// Model ya comment

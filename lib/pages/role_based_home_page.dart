@@ -3,9 +3,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/pages/custom_map_page.dart';
-import 'package:serkapp/pages/admin_map_page.dart';
-import 'package:serkapp/providers/auth_provider.dart';
+import 'package:serik/pages/custom_map_page.dart';
+import 'package:serik/pages/admin_map_page.dart';
+import 'package:serik/providers/auth_provider.dart';
 
 class RoleBasedHomePage extends StatelessWidget {
   const RoleBasedHomePage({super.key});

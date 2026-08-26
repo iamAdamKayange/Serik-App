@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/pages/admin_map_page.dart';
-import 'package:serkapp/pages/home_page.dart';
-import 'package:serkapp/pages/house_registration_page.dart';
-import 'package:serkapp/pages/houses_page.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/model/house_data.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/pages/admin_map_page.dart';
+import 'package:serik/pages/home_page.dart';
+import 'package:serik/pages/house_registration_page.dart';
+import 'package:serik/pages/houses_page.dart';
+import 'package:serik/pages/landlord_verification_page.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/model/house_data.dart';
 import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
 import '../model/tenant_model.dart';
@@ -949,6 +950,20 @@ class _RentalHomePageState extends State<RentalHomePage>
             onTap: () => CustomDialogs.showSuccess(
               context,
               "Fungua sehemu ya Wapangaji",
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ActionCard(
+            title: "Verification",
+            icon: Icons.verified_user_rounded,
+            color: const Color(0xFF9C27B0),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LandlordVerificationPage(),
+              ),
             ),
           ),
         ),

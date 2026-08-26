@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/l10n/app_localization.dart';
-import 'package:serkapp/pages/login_page.dart';
-import 'package:serkapp/providers/auth_provider.dart';
-import 'package:serkapp/services/api_services.dart';
-import 'package:serkapp/services/notification_service.dart';
+import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/pages/login_page.dart';
+import 'package:serik/providers/auth_provider.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:serik/services/notification_service.dart';
 
 class SmartAlertSettingsPage extends StatefulWidget {
   const SmartAlertSettingsPage({super.key});

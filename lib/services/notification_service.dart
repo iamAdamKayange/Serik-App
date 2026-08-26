@@ -5,9 +5,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:serkapp/firebase_options.dart';
-import 'package:serkapp/services/app_navigation_service.dart';
-import 'package:serkapp/services/api_services.dart';
+import 'package:serik/firebase_options.dart';
+import 'package:serik/services/app_navigation_service.dart';
+import 'package:serik/services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const AndroidNotificationChannel _newHousesChannel =

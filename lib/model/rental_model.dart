@@ -1,7 +1,7 @@
 // lib/model/rental_model.dart
 import 'package:intl/intl.dart';
-import 'package:serkapp/model/house_data.dart';
-import 'package:serkapp/model/house_data.dart' as house;
+import 'package:serik/model/house_data.dart';
+import 'package:serik/model/house_data.dart' as house;
 
 class RentalSpot {
   final String id;

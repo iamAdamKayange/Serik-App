@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:serkapp/services/api_services.dart';
+import 'package:serik/services/api_services.dart';
 
 class NetworkStatusService {
   NetworkStatusService._();

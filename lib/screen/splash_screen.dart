@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/pages/home_page.dart';
-import 'package:serkapp/providers/theme_provider.dart';
-import 'package:serkapp/screen/onboarding_screen.dart';
-import 'package:serkapp/services/app_navigation_service.dart';
+import 'package:serik/pages/home_page.dart';
+import 'package:serik/pages/rental_home_page.dart';
+import 'package:serik/providers/auth_provider.dart';
+import 'package:serik/providers/theme_provider.dart';
+import 'package:serik/screen/onboarding_screen.dart';
+import 'package:serik/services/app_navigation_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends HookConsumerWidget {
@@ -64,15 +66,37 @@ class SplashScreen extends HookConsumerWidget {
           final prefs = await SharedPreferences.getInstance();
           final hasSeenOnboarding =
               prefs.getBool(OnboardingScreen.onboardingSeenKey) ?? false;
+          
           if (!context.mounted) return;
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => hasSeenOnboarding
-                  ? const HomePage()
-                  : const OnboardingScreen(),
-            ),
-          );
+          
+          // Check authentication status and role
+          final authProvider = context.read<AuthProvider>();
+          
+          if (!authProvider.isLoggedIn) {
+            // If not logged in, go to onboarding or home
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => hasSeenOnboarding
+                    ? const HomePage()
+                    : const OnboardingScreen(),
+              ),
+            );
+          } else {
+            // If logged in, redirect based on role
+            if (authProvider.isLandlord) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const RentalHomePage()),
+              );
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const HomePage()),
+              );
+            }
+          }
+          
           unawaited(AppNavigationService.flushPendingNotificationNavigation());
         });
       });

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:serkapp/services/api_services.dart';
+import 'package:serik/services/api_services.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 typedef RealtimeCallback = void Function(dynamic data);

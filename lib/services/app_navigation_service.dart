@@ -3,12 +3,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serkapp/model/house_data.dart';
-import 'package:serkapp/model/rental_model.dart';
-import 'package:serkapp/pages/login_page.dart';
-import 'package:serkapp/providers/auth_provider.dart';
-import 'package:serkapp/screen/rental_detail_screen.dart';
-import 'package:serkapp/services/api_services.dart';
+import 'package:serik/model/house_data.dart';
+import 'package:serik/model/rental_model.dart';
+import 'package:serik/pages/login_page.dart';
+import 'package:serik/providers/auth_provider.dart';
+import 'package:serik/screen/rental_detail_screen.dart';
+import 'package:serik/services/api_services.dart';
 
 class AppNavigationService {
   AppNavigationService._();

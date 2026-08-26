@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:convert' as convert;
+import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,11 +9,17 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
+import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:serkapp/services/realtime_service.dart';
+import 'package:serik/services/realtime_service.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://serkapp-backend.onrender.com';
+  static String get baseUrl {
+    // Use environment variable or fallback to production URL
+    const envBaseUrl = String.fromEnvironment('API_BASE_URL');
+    return envBaseUrl.isNotEmpty ? envBaseUrl : 'https://serkapp-backend.onrender.com';
+  }
+  
   static const String apiPrefix = '/api';
   static const Duration timeout = Duration(seconds: 30);
 
@@ -35,6 +43,8 @@ class ApiService {
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-App-Version': '1.0.0',
+      'X-Platform': 'mobile',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
@@ -294,6 +304,21 @@ class ApiService {
     if (installCutoffAt != null && installCutoffAt.isNotEmpty) {
       queryParameters['installCutoffAt'] = installCutoffAt;
     }
+    
+    // Add user role to filter notifications
+    final token = await _storage.read(key: 'auth_token');
+    if (token != null) {
+      try {
+        final payload = _parseJwt(token);
+        final userRole = payload['role'] as String?;
+        if (userRole != null) {
+          queryParameters['userRole'] = userRole;
+        }
+      } catch (e) {
+        debugPrint('Failed to parse user role from token: $e');
+      }
+    }
+    
     final url = Uri.parse('$baseUrl$apiPrefix/notifications').replace(
       queryParameters: queryParameters,
     );
@@ -313,14 +338,41 @@ class ApiService {
     }
   }
 
+  static Map<String, dynamic> _parseJwt(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) return {};
+    final payload = parts[1];
+    final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+    final decoded = convert.base64.decode(normalized);
+    return jsonDecode(convert.utf8.decode(decoded));
+  }
+
   static Future<bool> deleteNotification(String notificationId) async {
     try {
+      final headers = await _getHeaders();
       final fcmToken = await _readFcmToken();
-      if (fcmToken == null) return false;
+      
+      if (fcmToken == null) {
+        debugPrint('deleteNotification: FCM token not available');
+        // Try without FCM token for auth-based deletion
+        final url = Uri.parse('$baseUrl$apiPrefix/notifications/$notificationId');
+        final response = await http.delete(url, headers: headers).timeout(timeout);
+        if (response.statusCode == 200) {
+          await _clearListCache(_notificationsCacheKey);
+          RealtimeService.instance.emit('notification:changed', {
+            'action': 'deleted',
+            'notificationId': notificationId,
+          });
+          return true;
+        }
+        debugPrint('deleteNotification failed: ${response.statusCode}');
+        return false;
+      }
+      
       final url = Uri.parse(
         '$baseUrl$apiPrefix/notifications/$notificationId',
       ).replace(queryParameters: {'token': fcmToken});
-      final response = await http.delete(url).timeout(timeout);
+      final response = await http.delete(url, headers: headers).timeout(timeout);
       if (response.statusCode == 200) {
         await _clearListCache(_notificationsCacheKey);
         RealtimeService.instance.emit('notification:changed', {
@@ -889,6 +941,259 @@ class ApiService {
     } catch (e) {
       debugPrint('⚠️ getVideoLikeStatus error: $e');
       return null;
+    }
+  }
+
+  // ==================== LANDLORD VERIFICATION ====================
+
+  /// Get overall verification status
+  static Future<Map<String, dynamic>?> getVerificationStatus() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/status');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      debugPrint('⚠️ getVerificationStatus: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ getVerificationStatus error: $e');
+      return null;
+    }
+  }
+
+  /// Submit identity verification
+  static Future<bool> submitIdentityVerification({
+    required String fullName,
+    required String ninNumber,
+    required File idPhoto,
+    required File selfie,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/identity');
+      final headers = await _getHeaders();
+      
+      // Remove Content-Type from headers to let http package set it with boundary
+      final requestHeaders = Map<String, String>.from(headers);
+      requestHeaders.remove('Content-Type');
+      
+      // Create multipart request
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(requestHeaders);
+      
+      // Add form fields
+      request.fields['fullName'] = fullName;
+      request.fields['ninNumber'] = ninNumber;
+      
+      // Add files
+      final idPhotoBytes = await idPhoto.readAsBytes();
+      final idPhotoMime = lookupMimeType(idPhoto.path) ?? 'image/jpeg';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'idPhoto',
+          idPhotoBytes,
+          filename: path.basename(idPhoto.path),
+          contentType: MediaType.parse(idPhotoMime),
+        ),
+      );
+      
+      final selfieBytes = await selfie.readAsBytes();
+      final selfieMime = lookupMimeType(selfie.path) ?? 'image/jpeg';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'selfie',
+          selfieBytes,
+          filename: path.basename(selfie.path),
+          contentType: MediaType.parse(selfieMime),
+        ),
+      );
+      
+      final response = await request.send().timeout(timeout);
+      
+      return response.statusCode == 201;
+    } catch (e) {
+      debugPrint('❌ submitIdentityVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Get identity verification status
+  static Future<Map<String, dynamic>?> getIdentityVerificationStatus() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/identity/status');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      debugPrint('⚠️ getIdentityVerificationStatus: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ getIdentityVerificationStatus error: $e');
+      return null;
+    }
+  }
+
+  /// Submit property verification
+  static Future<bool> submitPropertyVerification({
+    required File propertyDocument,
+    required List<File> propertyPhotos,
+    double? latitude,
+    double? longitude,
+    String? address,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/property');
+      final headers = await _getHeaders();
+      
+      // Remove Content-Type from headers to let http package set it with boundary
+      final requestHeaders = Map<String, String>.from(headers);
+      requestHeaders.remove('Content-Type');
+      
+      // Create multipart request
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(requestHeaders);
+      
+      // Add form fields
+      if (latitude != null) request.fields['latitude'] = latitude.toString();
+      if (longitude != null) request.fields['longitude'] = longitude.toString();
+      if (address != null) request.fields['address'] = address;
+      
+      // Add property document
+      final docBytes = await propertyDocument.readAsBytes();
+      final docMime = lookupMimeType(propertyDocument.path) ?? 'image/jpeg';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'propertyDocument',
+          docBytes,
+          filename: path.basename(propertyDocument.path),
+          contentType: MediaType.parse(docMime),
+        ),
+      );
+      
+      // Add property photos
+      for (int i = 0; i < propertyPhotos.length; i++) {
+        final photoBytes = await propertyPhotos[i].readAsBytes();
+        final photoMime = lookupMimeType(propertyPhotos[i].path) ?? 'image/jpeg';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'propertyPhotos',
+            photoBytes,
+            filename: path.basename(propertyPhotos[i].path),
+            contentType: MediaType.parse(photoMime),
+          ),
+        );
+      }
+      
+      final response = await request.send().timeout(timeout);
+      
+      return response.statusCode == 201;
+    } catch (e) {
+      debugPrint('❌ submitPropertyVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Get property verification status
+  static Future<Map<String, dynamic>?> getPropertyVerificationStatus() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/property/status');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      debugPrint('⚠️ getPropertyVerificationStatus: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ getPropertyVerificationStatus error: $e');
+      return null;
+    }
+  }
+
+  // Admin methods
+  /// Get pending identity verifications (admin only)
+  static Future<List<dynamic>> getPendingIdentityVerifications() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/identity/pending');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as List<dynamic>;
+      }
+      debugPrint('⚠️ getPendingIdentityVerifications: ${response.statusCode}');
+      return [];
+    } catch (e) {
+      debugPrint('⚠️ getPendingIdentityVerifications error: $e');
+      return [];
+    }
+  }
+
+  /// Get pending property verifications (admin only)
+  static Future<List<dynamic>> getPendingPropertyVerifications() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/property/pending');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as List<dynamic>;
+      }
+      debugPrint('⚠️ getPendingPropertyVerifications: ${response.statusCode}');
+      return [];
+    } catch (e) {
+      debugPrint('⚠️ getPendingPropertyVerifications error: $e');
+      return [];
+    }
+  }
+
+  /// Review identity verification (admin only)
+  static Future<bool> reviewIdentityVerification({
+    required String verificationId,
+    required String status,
+    String? adminNotes,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/identity/$verificationId/review');
+      final headers = await _getHeaders();
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: jsonEncode({
+          'status': status,
+          'adminNotes': adminNotes,
+        }),
+      ).timeout(timeout);
+      
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ reviewIdentityVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Review property verification (admin only)
+  static Future<bool> reviewPropertyVerification({
+    required String verificationId,
+    required String status,
+    String? adminNotes,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/property/$verificationId/review');
+      final headers = await _getHeaders();
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: jsonEncode({
+          'status': status,
+          'adminNotes': adminNotes,
+        }),
+      ).timeout(timeout);
+      
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ reviewPropertyVerification error: $e');
+      return false;
     }
   }
 
