@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmap;
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/services/api_services.dart';
@@ -615,7 +616,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Tafadhali weka jina maarufu la nyumba";
+                    return context.tr(
+                      "Tafadhali weka jina maarufu la nyumba",
+                      en: "Please enter the popular name of the house",
+                    );
                   }
                   return null;
                 },
@@ -628,7 +632,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Tafadhali weka jina mwenye nyumba";
+                    return context.tr(
+                      "Tafadhali weka jina mwenye nyumba",
+                      en: "Please enter the landlord name",
+                    );
                   }
                   return null;
                 },
@@ -641,7 +648,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Tafadhali weka namba ya nyumba";
+                    return context.tr(
+                      "Tafadhali weka namba ya nyumba",
+                      en: "Please enter the house number",
+                    );
                   }
                   return null;
                 },
@@ -655,10 +665,16 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                 onChanged: (_) => _scheduleDraftSave(),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Tafadhali weka namba yako ya simu";
+                    return context.tr(
+                      "Tafadhali weka namba yako ya simu",
+                      en: "Please enter your phone number",
+                    );
                   }
                   if (value.length < 10) {
-                    return "Namba ya simu si sahihi";
+                    return context.tr(
+                      "Namba ya simu si sahihi",
+                      en: "Invalid phone number",
+                    );
                   }
                   return null;
                 },
@@ -1152,7 +1168,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Bonyeza kuwasha/kuzima kipengele chochote kilichopo nyumbani kwako',
+                            context.tr(
+                              'Bonyeza kuwasha/kuzima kipengele chochote kilichopo nyumbani kwako',
+                              en: 'Tap to turn on/off any features in your home',
+                            ),
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.orange.shade700,
@@ -1544,10 +1563,16 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                       keyboardType: TextInputType.number,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return "Tafadhali weka bei";
+                          return context.tr(
+                            "Tafadhali weka bei",
+                            en: "Please enter the price",
+                          );
                         }
                         if (double.tryParse(value) == null) {
-                          return "Weka namba sahihi";
+                          return context.tr(
+                            "Weka namba sahihi",
+                            en: "Enter a valid number",
+                          );
                         }
                         return null;
                       },
@@ -1731,7 +1756,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    "Bonyeza kwenye ramani kuchagua eneo",
+                                    context.tr(
+                                      "Bonyeza kwenye ramani kuchagua eneo",
+                                      en: "Tap on the map to select location",
+                                    ),
                                     style: TextStyle(color: subtextColor),
                                   ),
                                   const SizedBox(height: 16),
@@ -1810,7 +1838,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       case 1:
         if (_useCustomBedrooms && _customBedroomController.text.isEmpty) {
           _showFeedback(
-            "Tafadhali weka idadi ya vyumba",
+            context.tr(
+              "Tafadhali weka idadi ya vyumba",
+              en: "Please enter the number of rooms",
+            ),
             isError: true,
             icon: Icons.warning_rounded,
           );
@@ -1820,7 +1851,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
           final customValue = int.tryParse(_customBedroomController.text);
           if (customValue == null || customValue < 1) {
             _showFeedback(
-              "Tafadhali weka idadi sahihi ya vyumba",
+              context.tr(
+                "Tafadhali weka idadi sahihi ya vyumba",
+                en: "Please enter a valid number of rooms",
+              ),
               isError: true,
               icon: Icons.warning_rounded,
             );
@@ -1831,7 +1865,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       case 2:
         if (_selectedImages.length < 3) {
           _showFeedback(
-            "Tafadhali pakia angalau picha tatu",
+            context.tr(
+              "Tafadhali pakia angalau picha tatu",
+              en: "Please upload at least three photos",
+            ),
             isError: true,
             icon: Icons.photo_library_outlined,
           );
@@ -1841,7 +1878,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       case 3:
         if (_rentPriceController.text.isEmpty) {
           _showFeedback(
-            "Tafadhali weka bei ya kukodisha",
+            context.tr(
+              "Tafadhali weka bei ya kukodisha",
+              en: "Please enter the rental price",
+            ),
             isError: true,
             icon: Icons.payments_outlined,
           );
@@ -1849,7 +1889,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         }
         if (_selectedRegion.isEmpty) {
           _showFeedback(
-            "Tafadhali chagua Mkoa",
+            context.tr(
+              "Tafadhali chagua Mkoa",
+              en: "Please select a Region",
+            ),
             isError: true,
             icon: Icons.location_city_outlined,
           );
@@ -1857,7 +1900,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         }
         if (_selectedDistrict.isEmpty) {
           _showFeedback(
-            "Tafadhali chagua Wilaya",
+            context.tr(
+              "Tafadhali chagua Wilaya",
+              en: "Please select a District",
+            ),
             isError: true,
             icon: Icons.map_outlined,
           );
@@ -1865,7 +1911,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         }
         if (_selectedWard.isEmpty) {
           _showFeedback(
-            "Tafadhali chagua Kata",
+            context.tr(
+              "Tafadhali chagua Kata",
+              en: "Please select a Ward",
+            ),
             isError: true,
             icon: Icons.place_outlined,
           );
@@ -1873,7 +1922,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         }
         if (_selectedStreet.isEmpty) {
           _showFeedback(
-            "Tafadhali weka jina la Mtaa",
+            context.tr(
+              "Tafadhali weka jina la Mtaa",
+              en: "Please enter the street name",
+            ),
             isError: true,
             icon: Icons.edit_location_alt_outlined,
           );
@@ -1881,7 +1933,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         }
         if (_selectedLocation == null) {
           _showFeedback(
-            "Tafadhali chagua eneo la nyumba kwenye ramani",
+            context.tr(
+              "Tafadhali chagua eneo la nyumba kwenye ramani",
+              en: "Please select the house location on the map",
+            ),
             isError: true,
             icon: Icons.map_rounded,
           );
@@ -1905,7 +1960,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     } catch (e) {
       if (!mounted) return;
       _showFeedback(
-        "Hitilafu ya kupakua picha: $e",
+        context.tr(
+          "Hitilafu ya kupakua picha: $e",
+          en: "Error uploading photos: $e",
+        ),
         isError: true,
         icon: Icons.photo_library_outlined,
       );
@@ -1934,7 +1992,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     } catch (e) {
       if (!mounted) return;
       _showFeedback(
-        'Hitilafu kuchagua video: $e',
+        context.tr(
+          'Hitilafu kuchagua video: $e',
+          en: 'Error selecting video: $e',
+        ),
         isError: true,
         icon: Icons.video_collection_rounded,
       );
@@ -1995,7 +2056,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     } catch (e) {
       if (!mounted) return;
       _showFeedback(
-        "Hitilafu ya kupata eneo: $e",
+        context.tr(
+          "Hitilafu ya kupata eneo: $e",
+          en: "Error getting location: $e",
+        ),
         isError: true,
         icon: Icons.location_searching_rounded,
       );
@@ -2093,7 +2157,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       await ApiService.logout();
       if (mounted) {
         _showFeedback(
-          'Tafadhali ingia tena kama Mwenye Nyumba.',
+          context.tr(
+            'Tafadhali ingia tena kama Mwenye Nyumba.',
+            en: 'Please login again as a Landlord.',
+          ),
           isError: true,
           icon: Icons.login_rounded,
         );
@@ -2186,7 +2253,10 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
           final verificationStatus = await ApiService.getVerificationStatus();
           if (verificationStatus != null && verificationStatus['canPublish'] != true) {
             _showFeedback(
-              "Lazima uwe verified kama mwenye nyumba kabla ya kuweka nyumba.",
+              context.tr(
+                "Lazima uwe verified kama mwenye nyumba kabla ya kuweka nyumba.",
+                en: "You must be verified as a landlord before listing houses.",
+              ),
               icon: Icons.warning_rounded,
               isError: true,
             );
@@ -2215,8 +2285,8 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
 
       if (result != null && mounted) {
         final successMsg = isEditing
-            ? "Nyumba imerekebishwa!"
-            : "Nyumba imesajiliwa!";
+            ? context.tr("Nyumba imerekebishwa!", en: "House updated!")
+            : context.tr("Nyumba imesajiliwa!", en: "House registered!");
         _showFeedback(successMsg, icon: Icons.check_circle_rounded);
         Navigator.pop(context, true);
         if (widget.onHouseAdded != null) {
@@ -2224,7 +2294,9 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         }
       } else {
         throw Exception(
-          isEditing ? "Kurekebisha hakukufaulu" : "Kuunda hakukufaulu",
+          isEditing 
+              ? context.tr("Kurekebisha hakukufaulu", en: "Update failed")
+              : context.tr("Kuunda hakukufaulu", en: "Creation failed"),
         );
       }
     } catch (e) {

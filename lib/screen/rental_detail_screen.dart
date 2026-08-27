@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:serik/l10n/app_localization.dart';
 import '../model/rental_model.dart';
 import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
@@ -1234,7 +1235,10 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
             child: Text(
               spot.description.isNotEmpty
                   ? spot.description
-                  : "Hakuna maelezo ya ziada yaliyotolewa na mwenye nyumba.",
+                  : context.tr(
+                      'Hakuna maelezo ya ziada yaliyotolewa na mwenye nyumba.',
+                      en: 'No additional description provided by the landlord.',
+                    ),
               style: TextStyle(fontSize: 15, color: textColor, height: 1.6),
             ),
           ),
@@ -1647,7 +1651,10 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
                   final uri = Uri.parse('tel:${widget.spot.phone}');
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 } else {
-                  _showErrorSnackBar(context, 'Hakuna namba ya simu');
+                  _showErrorSnackBar(
+                    context,
+                    context.tr('Hakuna namba ya simu', en: 'No phone number'),
+                  );
                 }
               },
               primaryColor,
@@ -1672,7 +1679,10 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
                   final uri = Uri.parse(widget.spot.getDirectionsUrl());
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 } else {
-                  _showErrorSnackBar(context, 'Hakuna eneo la nyumba');
+                  _showErrorSnackBar(
+                    context,
+                    context.tr('Hakuna eneo la nyumba', en: 'No house location'),
+                  );
                 }
               },
               primaryColor,

@@ -87,9 +87,12 @@ class AppLocalizations {
       'switchTheme': 'Switch theme',
       'darkMode': 'Dark mode',
       'lightMode': 'Light mode',
+      'systemMode': 'System default',
       'language': 'Language',
       'english': 'English',
       'swahili': 'Swahili',
+      'offline': 'Offline - App works offline',
+      'offlineSync': 'Sync',
     },
     'sw': {
       'appTitle': 'SERIK App',
@@ -157,9 +160,12 @@ class AppLocalizations {
       'switchTheme': 'Badili theme',
       'darkMode': 'Muonekano wa giza',
       'lightMode': 'Muonekano wa mwanga',
+      'systemMode': 'Chaguo la mfumo',
       'language': 'Lugha',
       'english': 'Kiingereza',
       'swahili': 'Kiswahili',
+      'offline': 'Hakuna intaneti - App inafanya kazi offline',
+      'offlineSync': 'Sync',
     },
   };
 
@@ -242,6 +248,9 @@ class AppLocalizations {
   String get language => _text('language');
   String get english => _text('english');
   String get swahili => _text('swahili');
+  String get offline => _text('offline');
+  String get offlineSync => _text('offlineSync');
+  String get systemMode => _text('systemMode');
 }
 
 class _AppLocalizationsDelegate

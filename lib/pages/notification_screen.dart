@@ -122,27 +122,27 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Color _getNotificationColor(String title, String body) {
     final combined = '$title $body'.toLowerCase();
     if (combined.contains('imekubaliwa') || combined.contains('approved')) {
-      return const Color(0xFF10B981);
+      return const Color(0xFF4CAF50);
     }
     if (combined.contains('kodi') || combined.contains('malipo')) {
-      return const Color(0xFF0EA5E9);
+      return const Color(0xFF2457D6);
     }
     if (combined.contains('ukarabati')) {
-      return const Color(0xFFF59E0B);
+      return const Color(0xFFFF9800);
     }
-    return const Color(0xFF2E7D32);
+    return const Color(0xFF0F8B61);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final primaryColor = isDark
-        ? const Color(0xFF4CAF50)
-        : const Color(0xFF2E7D32);
-    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF8FAFC);
-    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
-    final subtextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+        ? const Color(0xFF46D39A)
+        : const Color(0xFF0F8B61);
+    final bgColor = isDark ? const Color(0xFF0D1110) : const Color(0xFFF7F9F8);
+    final cardBg = isDark ? const Color(0xFF171C1A) : Colors.white;
+    final textColor = isDark ? const Color(0xFFF2F7F4) : const Color(0xFF15201C);
+    final subtextColor = isDark ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -150,7 +150,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         backgroundColor: cardBg,
         elevation: 0,
         title: Text(
-          'Arifa & Taarifa (Notifications)',
+          context.tr(
+            'Arifa & Taarifa',
+            en: 'Notifications',
+          ),
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -160,7 +163,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.tune_rounded),
-            tooltip: 'Smart alerts',
+            tooltip: context.tr(
+              'Miingiliano ya Akili',
+              en: 'Smart alerts',
+            ),
             onPressed: () {
               Navigator.push(
                 context,
@@ -186,21 +192,26 @@ class _NotificationScreenState extends State<NotificationScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildFilterChip('Zote', 'all', isDark, primaryColor),
                   _buildFilterChip(
-                    'Maombi ya Nyumba',
+                    context.tr('Zote', en: 'All'),
+                    'all',
+                    isDark,
+                    primaryColor,
+                  ),
+                  _buildFilterChip(
+                    context.tr('Maombi ya Nyumba', en: 'House Applications'),
                     'applications',
                     isDark,
                     primaryColor,
                   ),
                   _buildFilterChip(
-                    'Malipo & Kodi',
+                    context.tr('Malipo & Kodi', en: 'Payments & Rent'),
                     'payments',
                     isDark,
                     primaryColor,
                   ),
                   _buildFilterChip(
-                    'Nyumba Mpya',
+                    context.tr('Nyumba Mpya', en: 'New Houses'),
                     'houses',
                     isDark,
                     primaryColor,
@@ -234,7 +245,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              'Imeshindwa kupakia arifa.',
+                              context.tr(
+                                'Imeshindwa kupakia arifa.',
+                                en: 'Failed to load notifications.',
+                              ),
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: textColor,
@@ -253,9 +267,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     notifications = [
                       {
                         'id': 'notif-1',
-                        'title': 'Maombi Yako Yamekubaliwa! 🎉',
-                        'body':
-                            'Mwenye nyumba wa "Apartment ya Kisasa - Makumbusho" amekubali maombi yako. Unaweza kulipa deposit sasa ili kuhifadhi nyumba.',
+                        'title': context.tr(
+                          'Maombi Yako Yamekubaliwa! 🎉',
+                          en: 'Your Application Accepted! 🎉',
+                        ),
+                        'body': context.tr(
+                          'Mwenye nyumba wa "Apartment ya Kisasa - Makumbusho" amekubali maombi yako. Unaweza kulipa deposit sasa ili kuhifadhi nyumba.',
+                          en: 'The landlord of "Modern Apartment - Makumbusho" has accepted your application. You can pay the deposit now to secure the house.',
+                        ),
                         'created_at': DateTime.now()
                             .subtract(const Duration(minutes: 45))
                             .toIso8601String(),
@@ -263,9 +282,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       },
                       {
                         'id': 'notif-2',
-                        'title': 'Kumbukumbu ya Malipo ya Kodi 💡',
-                        'body':
-                            'Kodi ya mwezi ujao kwa nyumba ya Sinza Mori inatarajiwa kulipwa ndani ya siku 14.',
+                        'title': context.tr(
+                          'Kumbukumbu ya Malipo ya Kodi 💡',
+                          en: 'Rent Payment Reminder 💡',
+                        ),
+                        'body': context.tr(
+                          'Kodi ya mwezi ujao kwa nyumba ya Sinza Mori inatarajiwa kulipwa ndani ya siku 14.',
+                          en: 'Next month rent for the Sinza Mori house is expected to be paid within 14 days.',
+                        ),
                         'created_at': DateTime.now()
                             .subtract(const Duration(days: 1))
                             .toIso8601String(),
@@ -273,9 +297,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       },
                       {
                         'id': 'notif-3',
-                        'title': 'Nyumba Mpya Karibu na UDOM! 🎓',
-                        'body':
-                            'Vyumba 4 vipya vya wanafunzi vyenye tiles na maji ndani vimeongezwa Chuo Kikuu Dodoma.',
+                        'title': context.tr(
+                          'Nyumba Mpya Karibu na UDOM! 🎓',
+                          en: 'New House Near UDOM! 🎓',
+                        ),
+                        'body': context.tr(
+                          'Vyumba 4 vipya vya wanafunzi vyenye tiles na maji ndani vimeongezwa Chuo Kikuu Dodoma.',
+                          en: '4 new student rooms with tiles and running water have been added at the University of Dodoma.',
+                        ),
                         'created_at': DateTime.now()
                             .subtract(const Duration(days: 2))
                             .toIso8601String(),
@@ -355,8 +384,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
                               color: isDark
-                                  ? const Color(0xFF2C2C2C)
-                                  : const Color(0xFFE2E8F0),
+                                  ? const Color(0xFF26312D)
+                                  : const Color(0xFFE2E8E5),
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -447,7 +476,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                         if (isAppNotif) ...[
                                           const SizedBox(height: 8),
                                           Text(
-                                            'Bofya ili kufuatilia maombi yako →',
+                                            context.tr(
+                                              'Bofya ili kufuatilia maombi yako →',
+                                              en: 'Tap to track your application →',
+                                            ),
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w700,
@@ -490,7 +522,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? primaryColor
-              : (isDark ? const Color(0xFF282828) : const Color(0xFFF1F5F9)),
+              : (isDark ? const Color(0xFF26312D) : const Color(0xFFE2E8E5)),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

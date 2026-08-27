@@ -5,7 +5,6 @@ import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/model/rental_model.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/providers/auth_provider.dart';
-import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:video_player/video_player.dart';
@@ -58,7 +57,7 @@ class VideoComment {
 
 class VideoFeedItem {
   final RentalSpot spot;
-  final String videoId; // Sasa ni URL halisi ya video
+  final String videoId;
   final String videoUrl;
   final String? thumbnailUrl;
   int likes;
@@ -253,9 +252,12 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
           item.likes += item.liked ? 1 : -1;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hitilafu kubadilisha like'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Text(context.tr(
+              'Hitilafu kubadilisha like',
+              en: 'Error changing like',
+            )),
+            backgroundColor: const Color(0xFFD32F2F),
           ),
         );
       }
@@ -266,7 +268,13 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
         item.likes += item.liked ? 1 : -1;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hitilafu: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(context.tr(
+            'Hitilafu: $e',
+            en: 'Error: $e',
+          )),
+          backgroundColor: const Color(0xFFD32F2F),
+        ),
       );
     }
   }
@@ -334,8 +342,11 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Hitilafu kupata comments: $e'),
-          backgroundColor: Colors.red,
+          content: Text(context.tr(
+            'Hitilafu kupata comments: $e',
+            en: 'Error getting comments: $e',
+          )),
+          backgroundColor: const Color(0xFFD32F2F),
         ),
       );
     }
@@ -510,8 +521,8 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
   // BUILD COMMENT TILE
   // ============================================================
   Widget _buildCommentTile(VideoComment comment, VideoFeedItem item) {
-    final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final theme = Theme.of(context);
+    final textColor = theme.colorScheme.onSurface;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -625,8 +636,8 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
   // BUILD REPLY TILE
   // ============================================================
   Widget _buildReplyTile(VideoComment reply, VideoFeedItem item) {
-    final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final theme = Theme.of(context);
+    final textColor = theme.colorScheme.onSurface;
 
     return Padding(
       padding: const EdgeInsets.only(left: 48, top: 4),
@@ -799,22 +810,34 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Jibu limetumwa!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(context.tr(
+              'Jibu limetumwa!',
+              en: 'Reply sent!',
+            )),
+            backgroundColor: const Color(0xFF4CAF50),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hitilafu kutuma jibu'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Text(context.tr(
+              'Hitilafu kutuma jibu',
+              en: 'Error sending reply',
+            )),
+            backgroundColor: const Color(0xFFD32F2F),
           ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hitilafu: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(context.tr(
+            'Hitilafu: $e',
+            en: 'Error: $e',
+          )),
+          backgroundColor: const Color(0xFFD32F2F),
+        ),
       );
     } finally {
       setState(() {
@@ -863,22 +886,34 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
         _commentController.clear();
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Comment imetumwa!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(context.tr(
+              'Comment imetumwa!',
+              en: 'Comment sent!',
+            )),
+            backgroundColor: const Color(0xFF4CAF50),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hitilafu kutuma comment'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Text(context.tr(
+              'Hitilafu kutuma comment',
+              en: 'Error sending comment',
+            )),
+            backgroundColor: const Color(0xFFD32F2F),
           ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hitilafu: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(context.tr(
+            'Hitilafu: $e',
+            en: 'Error: $e',
+          )),
+          backgroundColor: const Color(0xFFD32F2F),
+        ),
       );
     } finally {
       setState(() {
@@ -980,9 +1015,7 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: backgroundColor,
-        body: Center(
-          child: CircularProgressIndicator(color: colors.primary),
-        ),
+        body: Center(child: CircularProgressIndicator(color: colors.primary)),
       );
     }
 
@@ -995,10 +1028,7 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.video_library_outlined,
-                  size: 72,
-                ),
+                const Icon(Icons.video_library_outlined, size: 72),
                 const SizedBox(height: 16),
                 Text(
                   _errorMessage == 'error'
@@ -1056,7 +1086,10 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 child: Row(
                   children: [
                     Icon(Icons.play_circle_rounded, color: colors.primary),
@@ -1201,7 +1234,9 @@ class _VideoFeedTileState extends State<_VideoFeedTile>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Container(color: Colors.black),
+          Container(
+            color: Colors.black,
+          ), // Video background should remain black
 
           if (_hasError)
             Center(
@@ -1344,7 +1379,7 @@ class _VideoFeedTileState extends State<_VideoFeedTile>
                         Flexible(
                           child: Text(
                             l10n.loginForHouseInfo,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
                             ),

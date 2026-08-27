@@ -91,12 +91,20 @@ class _UniversityDetailPageState extends State<UniversityDetailPage> {
       if (e.toString().contains('SocketException') ||
           e.toString().contains('Failed host lookup') ||
           e.toString().contains('Network is unreachable')) {
-        userMessage =
-            "Hakuna muunganisho wa mtandao. Tafadhali angalia intaneti yako.";
+        userMessage = context.tr(
+          "Hakuna muunganisho wa mtandao. Tafadhali angalia intaneti yako.",
+          en: "No internet connection. Please check your internet.",
+        );
       } else if (e.toString().contains('timeout')) {
-        userMessage = "Muunganisho umechukua muda mrefu. Jaribu tena.";
+        userMessage = context.tr(
+          "Muunganisho umechukua muda mrefu. Jaribu tena.",
+          en: "Connection took too long. Please try again.",
+        );
       } else {
-        userMessage = "Hitilafu katika kupakua nyumba. Jaribu tena baadaye.";
+        userMessage = context.tr(
+          "Hitilafu katika kupakua nyumba. Jaribu tena baadaye.",
+          en: "Error loading houses. Please try again later.",
+        );
       }
       setState(() {
         _isLoading = false;

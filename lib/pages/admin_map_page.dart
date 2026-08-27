@@ -99,7 +99,10 @@ class _AdminMapPageState extends State<AdminMapPage> {
     } catch (e) {
       debugPrint('❌ Error loading houses: $e');
       setState(() => _isLoading = false);
-      _showError("Imeshindwa kupakia nyumba zako: $e");
+      _showError(context.tr(
+        'Imeshindwa kupakia nyumba zako: $e',
+        en: 'Failed to load your houses: $e',
+      ));
     }
   }
 
@@ -1003,7 +1006,10 @@ class _AdminMapPageState extends State<AdminMapPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        "Bonyeza kitufe cha '+' kuongeza nyumba yako ya kwanza",
+                        context.tr(
+                          "Bonyeza kitufe cha '+' kuongeza nyumba yako ya kwanza",
+                          en: "Tap the '+' button to add your first house",
+                        ),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: isDarkMode ? Colors.grey[400] : Colors.grey,

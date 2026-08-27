@@ -5,6 +5,7 @@ import 'package:serik/l10n/app_localization.dart';
 
 class CustomDialogs {
   static void showSuccess(BuildContext context, String message) {
+    final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -34,7 +35,7 @@ class CustomDialogs {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF1B8A5A),
+        backgroundColor: const Color(0xFF4CAF50),
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
@@ -48,6 +49,7 @@ class CustomDialogs {
   }
 
   static void showError(BuildContext context, String message) {
+    final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -96,12 +98,11 @@ class CustomDialogs {
     VoidCallback onLogout, {
     bool isDarkMode = false,
   }) {
-    final Color backgroundColor = isDarkMode
-        ? const Color(0xFF1E1E1E)
-        : Colors.white;
-    final Color textColor = isDarkMode ? Colors.white : Colors.black87;
-    final Color labelColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
-    final Color primaryColor = const Color(0xFF0D47A1);
+    final theme = Theme.of(context);
+    final Color backgroundColor = theme.colorScheme.surface;
+    final Color textColor = theme.colorScheme.onSurface;
+    final Color labelColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final Color primaryColor = theme.colorScheme.primary;
 
     showDialog(
       context: context,
@@ -109,8 +110,8 @@ class CustomDialogs {
         backgroundColor: backgroundColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: isDarkMode
-              ? BorderSide(color: Colors.grey[800]!, width: 0.5)
+          side: theme.brightness == Brightness.dark
+              ? BorderSide(color: theme.colorScheme.outline, width: 0.5)
               : BorderSide.none,
         ),
         title: Row(
@@ -118,7 +119,7 @@ class CustomDialogs {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: isDarkMode ? 0.2 : 0.1),
+                color: primaryColor.withValues(alpha: theme.brightness == Brightness.dark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.account_circle, size: 28, color: primaryColor),
@@ -139,24 +140,28 @@ class CustomDialogs {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildProfileRow(
+              context,
               Icons.person_outline,
               context.tr('Jina', en: 'Name'),
               context.tr('Mpangishaji Pro', en: 'Landlord Pro'),
               isDarkMode: isDarkMode,
             ),
             _buildProfileRow(
+              context,
               Icons.email_outlined,
               context.tr('Barua Pepe', en: 'Email'),
               "mpangishaji@serkapp.com",
               isDarkMode: isDarkMode,
             ),
             _buildProfileRow(
+              context,
               Icons.phone_outlined,
               context.tr('Simu', en: 'Phone'),
               "+255 123 456 789",
               isDarkMode: isDarkMode,
             ),
             _buildProfileRow(
+              context,
               Icons.home_work_outlined,
               context.tr('Nyumba Zako', en: 'Your Houses'),
               context.tr('$houseCount nyumba', en: '$houseCount houses'),
@@ -183,7 +188,7 @@ class CustomDialogs {
               style: GoogleFonts.poppins(color: Colors.white),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD32F2F),
+              backgroundColor: theme.colorScheme.error,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -205,11 +210,10 @@ class CustomDialogs {
     String status, {
     bool isDarkMode = false,
   }) {
-    final Color backgroundColor = isDarkMode
-        ? const Color(0xFF1E1E1E)
-        : Colors.white;
-    final Color textColor = isDarkMode ? Colors.white : Colors.black87;
-    final Color primaryColor = const Color(0xFF0D47A1);
+    final theme = Theme.of(context);
+    final Color backgroundColor = theme.colorScheme.surface;
+    final Color textColor = theme.colorScheme.onSurface;
+    final Color primaryColor = theme.colorScheme.primary;
 
     showDialog(
       context: context,
@@ -217,8 +221,8 @@ class CustomDialogs {
         backgroundColor: backgroundColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: isDarkMode
-              ? BorderSide(color: Colors.grey[800]!, width: 0.5)
+          side: theme.brightness == Brightness.dark
+              ? BorderSide(color: theme.colorScheme.outline, width: 0.5)
               : BorderSide.none,
         ),
         title: Row(
@@ -226,7 +230,7 @@ class CustomDialogs {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: isDarkMode ? 0.2 : 0.1),
+                color: primaryColor.withValues(alpha: theme.brightness == Brightness.dark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.person, size: 24, color: primaryColor),
@@ -250,24 +254,28 @@ class CustomDialogs {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDetailRow(
+              context,
               Icons.phone,
               context.tr('Simu', en: 'Phone'),
               phone,
               isDarkMode: isDarkMode,
             ),
             _buildDetailRow(
+              context,
               Icons.home,
               context.tr('Nyumba', en: 'House'),
               houseName,
               isDarkMode: isDarkMode,
             ),
             _buildDetailRow(
+              context,
               Icons.attach_money,
               context.tr('Kodi', en: 'Rent'),
               "TZS ${NumberFormat('#,###').format(rentAmount)}",
               isDarkMode: isDarkMode,
             ),
             _buildDetailRow(
+              context,
               Icons.calendar_today,
               context.tr('Kuanzia', en: 'From'),
               DateFormat('dd/MM/yyyy').format(startDate),
@@ -275,12 +283,14 @@ class CustomDialogs {
             ),
             if (endDate != null)
               _buildDetailRow(
+                context,
                 Icons.event,
                 context.tr('Mwisho', en: 'End'),
                 DateFormat('dd/MM/yyyy').format(endDate),
                 isDarkMode: isDarkMode,
               ),
             _buildDetailRow(
+              context,
               Icons.badge,
               context.tr('Hali', en: 'Status'),
               status,
@@ -302,14 +312,16 @@ class CustomDialogs {
   }
 
   static Widget _buildProfileRow(
+    BuildContext context,
     IconData icon,
     String label,
     String value, {
     bool isDarkMode = false,
   }) {
-    final Color labelColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
-    final Color textColor = isDarkMode ? Colors.white : Colors.black87;
-    final Color iconColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
+    final theme = Theme.of(context);
+    final Color labelColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final Color textColor = theme.colorScheme.onSurface;
+    final Color iconColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -337,14 +349,16 @@ class CustomDialogs {
   }
 
   static Widget _buildDetailRow(
+    BuildContext context,
     IconData icon,
     String label,
     String value, {
     bool isDarkMode = false,
   }) {
-    final Color labelColor = isDarkMode ? Colors.grey[400]! : Colors.grey[700]!;
-    final Color textColor = isDarkMode ? Colors.white : Colors.black87;
-    final Color iconColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
+    final theme = Theme.of(context);
+    final Color labelColor = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    final Color textColor = theme.colorScheme.onSurface;
+    final Color iconColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),

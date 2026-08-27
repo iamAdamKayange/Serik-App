@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/model/rental_model.dart';
 import 'package:serik/pages/custom_map_page.dart';
@@ -17,6 +18,9 @@ import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/services/realtime_service.dart';
 import 'package:serik/widgets/saved_house_button.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:serik/utils/app_typography.dart';
+import 'package:serik/utils/responsive_utils.dart';
 
 class HomePage extends StatefulWidget {
   final Function()? onHouseAdded;
@@ -1237,7 +1241,10 @@ class _HomePageState extends State<HomePage>
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Hakuna nyumba zilizopatikana',
+                      context.tr(
+                        'Hakuna nyumba zilizopatikana',
+                        en: 'No houses found',
+                      ),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -1690,7 +1697,10 @@ class _HomePageState extends State<HomePage>
       body: _filteredSpots.isEmpty
           ? Center(
               child: Text(
-                'Hakuna nyumba zilizopatikana.',
+                context.tr(
+                  'Hakuna nyumba zilizopatikana.',
+                  en: 'No houses found.',
+                ),
                 style: TextStyle(color: subtextColor),
               ),
             )

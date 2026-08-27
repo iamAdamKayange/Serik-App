@@ -184,12 +184,20 @@ class _CustomMapPageState extends State<CustomMapPage> {
       if (e.toString().contains('SocketException') ||
           e.toString().contains('Failed host lookup') ||
           e.toString().contains('Network is unreachable')) {
-        errorMessage =
-            "Hakuna muunganisho wa mtandao. Tafadhali angalia intaneti yako.";
+        errorMessage = context.tr(
+          "Hakuna muunganisho wa mtandao. Tafadhali angalia intaneti yako.",
+          en: "No internet connection. Please check your internet.",
+        );
       } else if (e.toString().contains('timeout')) {
-        errorMessage = "Muunganisho umechukua muda mrefu. Jaribu tena.";
+        errorMessage = context.tr(
+          "Muunganisho umechukua muda mrefu. Jaribu tena.",
+          en: "Connection took too long. Please try again.",
+        );
       } else {
-        errorMessage = "Hitilafu katika kupakua nyumba. Jaribu tena baadaye.";
+        errorMessage = context.tr(
+          "Hitilafu katika kupakua nyumba. Jaribu tena baadaye.",
+          en: "Error loading houses. Please try again later.",
+        );
       }
       _showError(errorMessage);
     }
@@ -1700,11 +1708,13 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       Icon(
                         Icons.wifi_off,
                         size: 60,
-                        color: Colors.red.shade300,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.orange[300]
+                            : Colors.orange[600],
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Imeshindwa kupakia nyumba',
+                        context.tr('Imeshindwa kupakia nyumba', en: 'Failed to load houses'),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1713,7 +1723,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Tafadhali angalia muunganisho wako wa intaneti',
+                        context.tr('Tafadhali angalia muunganisho wako wa intaneti', en: 'Please check your internet connection'),
                         textAlign: TextAlign.center,
                         style: TextStyle(color: subtextColor),
                       ),
@@ -1724,6 +1734,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
                         label: Text(context.tr('Jaribu Tena', en: 'Try Again')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
                         ),
                       ),
                     ],

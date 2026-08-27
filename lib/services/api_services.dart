@@ -969,6 +969,7 @@ class ApiService {
     required String ninNumber,
     required File idPhoto,
     required File selfie,
+    File? idDocument,
   }) async {
     try {
       final url = Uri.parse('$baseUrl$apiPrefix/verification/identity');
@@ -1008,6 +1009,20 @@ class ApiService {
           contentType: MediaType.parse(selfieMime),
         ),
       );
+
+      // Add optional ID document (PDF/DOC)
+      if (idDocument != null) {
+        final docBytes = await idDocument.readAsBytes();
+        final docMime = lookupMimeType(idDocument.path) ?? 'application/pdf';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'idDocument',
+            docBytes,
+            filename: path.basename(idDocument.path),
+            contentType: MediaType.parse(docMime),
+          ),
+        );
+      }
       
       final response = await request.send().timeout(timeout);
       

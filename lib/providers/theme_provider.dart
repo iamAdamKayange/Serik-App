@@ -6,31 +6,58 @@ class ThemeProvider with ChangeNotifier {
   static const String _themeKey = 'theme_mode';
   static const String _localeKey = 'app_locale';
 
-  bool _isDarkMode = false;
+  ThemeMode _themeMode = ThemeMode.system;
   Locale _locale = const Locale('sw');
 
   ThemeProvider() {
     _loadSettings();
   }
 
-  bool get isDarkMode => _isDarkMode;
+  ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
   String get languageCode => _locale.languageCode;
 
-  ThemeMode get themeMode => _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+  bool get isDarkMode {
+    if (_themeMode == ThemeMode.dark) return true;
+    if (_themeMode == ThemeMode.light) return false;
+    // System mode - will be determined by MediaQuery
+    return false; // Default fallback
+  }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool(_themeKey) ?? false;
+    final themeString = prefs.getString(_themeKey);
+    
+    if (themeString == 'dark') {
+      _themeMode = ThemeMode.dark;
+    } else if (themeString == 'light') {
+      _themeMode = ThemeMode.light;
+    } else {
+      _themeMode = ThemeMode.system;
+    }
+    
     _locale = Locale(prefs.getString(_localeKey) ?? 'sw');
     notifyListeners();
   }
 
-  Future<void> toggleTheme() async {
-    _isDarkMode = !_isDarkMode;
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_themeKey, _isDarkMode);
+    final themeString = mode == ThemeMode.dark ? 'dark' : 
+                       mode == ThemeMode.light ? 'light' : 'system';
+    await prefs.setString(_themeKey, themeString);
     notifyListeners();
+  }
+
+  Future<void> toggleTheme() async {
+    // Cycle through: system -> light -> dark -> system
+    if (_themeMode == ThemeMode.system) {
+      await setThemeMode(ThemeMode.light);
+    } else if (_themeMode == ThemeMode.light) {
+      await setThemeMode(ThemeMode.dark);
+    } else {
+      await setThemeMode(ThemeMode.system);
+    }
   }
 
   Future<void> setLocale(Locale locale) async {

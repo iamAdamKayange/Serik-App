@@ -74,6 +74,9 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(_dailyReminderChannel);
     await androidPlugin?.requestNotificationsPermission();
 
+    // Clear notifications on fresh install
+    await _clearNotificationsOnFreshInstall();
+
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
     await scheduleDailyReminder();
@@ -93,6 +96,19 @@ class NotificationService {
       unawaited(
         AppNavigationService.openHouseFromNotification(initialMessage.data),
       );
+    }
+  }
+
+  Future<void> _clearNotificationsOnFreshInstall() async {
+    final prefs = await SharedPreferences.getInstance();
+    const clearedKey = 'notifications_cleared';
+    final cleared = prefs.getBool(clearedKey);
+    
+    if (cleared != true) {
+      // This is a fresh install or upgrade - clear all notifications
+      await _localNotifications.cancelAll();
+      await prefs.setBool(clearedKey, true);
+      debugPrint('Cleared all notifications on fresh install');
     }
   }
 
@@ -185,10 +201,23 @@ class NotificationService {
   Future<String> _installCutoffAt() async {
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(_installCutoffKey);
+    
+    // Check if this is a fresh install by checking a separate key
+    const firstInstallKey = 'app_first_install_time';
+    final firstInstall = prefs.getString(firstInstallKey);
+    
+    if (firstInstall == null) {
+      // This is a fresh install
+      final now = DateTime.now().toUtc().toIso8601String();
+      await prefs.setString(firstInstallKey, now);
+      await prefs.setString(_installCutoffKey, now);
+      return now;
+    }
+    
+    // If installCutoffAt exists, use it. Otherwise, use first install time
     if (existing != null && existing.isNotEmpty) return existing;
 
-    final now = DateTime.now().toUtc().toIso8601String();
-    await prefs.setString(_installCutoffKey, now);
-    return now;
+    await prefs.setString(_installCutoffKey, firstInstall);
+    return firstInstall;
   }
 }

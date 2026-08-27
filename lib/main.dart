@@ -17,7 +17,7 @@ import 'package:flutter/foundation.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Enable secure network communication in release mode
   if (kReleaseMode) {
     // Additional security configurations for production
@@ -105,57 +105,92 @@ class MyApp extends StatelessWidget {
         return ValueListenableBuilder<bool>(
           valueListenable: NetworkStatusService.instance.isOnline,
           builder: (context, isOnline, _) {
-            return Stack(
-              children: [
-                child ?? const SizedBox.shrink(),
-                if (!isOnline)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: SafeArea(
-                      bottom: false,
-                      child: Container(
-                        margin: const EdgeInsets.all(12),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFB45309),
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 18,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.wifi_off_rounded, color: Colors.white),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Unafanya kazi offline. Data ita-sync ukipata intaneti.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+            return Scaffold(
+              body: _buildOfflineBanner(context, isOnline, child),
             );
           },
         );
       },
       home: const SplashScreen(),
+    );
+  }
+
+  Widget _buildOfflineBanner(
+    BuildContext context,
+    bool isOnline,
+    Widget? child,
+  ) {
+    if (isOnline) {
+      return child ?? const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final locale = Localizations.localeOf(context);
+    final appLocalizations = AppLocalizations(locale);
+
+    return Stack(
+      children: [
+        child ?? const SizedBox.shrink(),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Material(
+            color: isDark ? Colors.grey[900] : Colors.grey[800],
+            elevation: 2,
+            child: SafeArea(
+              bottom: false,
+              child: Container(
+                height: 32,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.cloud_off_rounded,
+                      color: isDark ? Colors.orange[300] : Colors.orange,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        appLocalizations.offline,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.orange[300] : Colors.orange)
+                            ?.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        appLocalizations.offlineSync,
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
