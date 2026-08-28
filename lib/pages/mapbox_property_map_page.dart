@@ -364,16 +364,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     return bytes!.buffer.asUint8List();
   }
 
-  String _formatPrice(double price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(price % 1000000 == 0 ? 0 : 1)}M';
-    }
-    if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(price % 1000 == 0 ? 0 : 1)}K';
-    }
-    return price.toStringAsFixed(0);
-  }
-
   Future<void> _openDirections(RentalSpot spot) async {
     final uri = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=${spot.latitude},${spot.longitude}',
@@ -834,21 +824,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     );
   }
 
-  Widget _filterChip(String value) {
-    final label = value == 'Zote'
-        ? context.tr('Zote', en: 'All')
-        : value.replaceAll('_', ' ');
-    final selected = _selectedType == value;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) {
-        setState(() => _selectedType = value);
-        _refreshAnnotations();
-      },
-    );
-  }
-
   Widget _buildCompactFilterChip(String value) {
     final label = value == 'Zote'
         ? context.tr('Zote', en: 'All')
@@ -865,36 +840,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       checkmarkColor: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       visualDensity: VisualDensity.compact,
-    );
-  }
-
-  Widget _buildCompactUniversitySelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: surfaceColor.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.school_rounded, color: primaryColor, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            _selectedUniversity == 'Zote' 
-                ? context.tr('Vyote', en: 'All') 
-                : _selectedUniversity,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(Icons.expand_more, color: primaryColor, size: 16),
-        ],
-      ),
     );
   }
 
@@ -1021,24 +966,31 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           // Thumbnail
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: CachedNetworkImage(
-              imageUrl: spot.thumbnailUrl,
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                width: 60,
-                height: 60,
-                color: surfaceColor,
-                child: Icon(Icons.home_rounded, color: subtextColor, size: 24),
-              ),
-              errorWidget: (context, url, error) => Container(
-                width: 60,
-                height: 60,
-                color: surfaceColor,
-                child: Icon(Icons.broken_image, color: subtextColor, size: 24),
-              ),
-            ),
+            child: spot.images.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: spot.images.first,
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 60,
+                      height: 60,
+                      color: surfaceColor,
+                      child: Icon(Icons.home_rounded, color: subtextColor, size: 24),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 60,
+                      height: 60,
+                      color: surfaceColor,
+                      child: Icon(Icons.broken_image, color: subtextColor, size: 24),
+                    ),
+                  )
+                : Container(
+                    width: 60,
+                    height: 60,
+                    color: surfaceColor,
+                    child: Icon(Icons.home_rounded, color: subtextColor, size: 24),
+                  ),
           ),
           const SizedBox(width: 12),
           // Property info
@@ -1117,11 +1069,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   void _navigateToPropertyDetail(RentalSpot spot) {
     // Navigate to property detail - placeholder for navigation logic
     // This would typically navigate to RentalDetailScreen or similar
-  }
-
-  void _showPropertyDetails(RentalSpot spot) {
-    // Show property details - placeholder for navigation logic
-    // This would typically navigate to RentalDetailScreen
   }
 }
 
