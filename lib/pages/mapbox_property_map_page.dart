@@ -559,61 +559,68 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: Text(
-          widget.mode == PropertyMapMode.landlord
-              ? context.tr('Ramani ya Nyumba Zangu', en: 'My Houses Map')
-              : context.tr('Ramani ya Nyumba', en: 'Property Map'),
-        ),
-        backgroundColor: backgroundColor,
-        foregroundColor: textColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _determinePosition,
-            icon: const Icon(Icons.my_location_rounded),
-          ),
-          IconButton(
-            onPressed: _loadData,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: Stack(
+      body: Column(
         children: [
-          mapbox.MapWidget(
-            key: const ValueKey('mapbox-property-map'),
-            cameraOptions: mapbox.CameraOptions(
-              center: mapbox.Point(coordinates: initialCenter),
-              zoom: 12,
+          // Compact header
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 12,
+              right: 12,
+              bottom: 8,
             ),
-            styleUri: mapbox.MapboxStyles.MAPBOX_STREETS,
-            textureView: true,
-            onMapCreated: _onMapCreated,
-            onCameraChangeListener: _onCameraChangeListener,
-            onTapListener: _handleTap,
+            color: backgroundColor,
+            child: Row(
+              children: [
+                // Compact title
+                Expanded(
+                  child: Text(
+                    widget.mode == PropertyMapMode.landlord
+                        ? context.tr('Ramani ya Nyumba Zangu', en: 'My Houses Map')
+                        : context.tr('Ramani ya Nyumba', en: 'Property Map'),
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                // Compact action buttons
+                IconButton(
+                  onPressed: _determinePosition,
+                  icon: const Icon(Icons.my_location_rounded, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+                IconButton(
+                  onPressed: _loadData,
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
+            ),
           ),
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
-            right: 16,
+          // Compact search bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: searchBarBg,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
                   BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: Row(
                 children: [
-                  Icon(Icons.search_rounded, color: subtextColor),
-                  const SizedBox(width: 10),
+                  Icon(Icons.search_rounded, color: subtextColor, size: 18),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _searchController,
@@ -621,97 +628,186 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                         setState(() => _searchQuery = value);
                         _refreshAnnotations();
                       },
-                      style: TextStyle(color: textColor),
+                      style: TextStyle(color: textColor, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: context.tr(
-                          'Tafuta nyumba, eneo, bei...',
-                          en: 'Search houses, area, price...',
+                          'Tafuta nyumba...',
+                          en: 'Search houses...',
                         ),
+                        hintStyle: TextStyle(color: subtextColor, fontSize: 14),
                         border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
                       ),
                     ),
                   ),
                   if (_searchQuery.isNotEmpty)
                     IconButton(
-                      icon: Icon(Icons.close_rounded, color: primaryColor),
+                      icon: Icon(Icons.close_rounded, color: primaryColor, size: 16),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
                         _refreshAnnotations();
                       },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                     ),
                 ],
               ),
             ),
           ),
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 82,
-            left: 16,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _filterChip('Zote'),
-                ...['self_container', 'shared', 'bedsitter', 'studio', 'flat'].map(
-                  (type) => _filterChip(type),
-                ),
-              ],
+          // Compact horizontal filter row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: SizedBox(
+              height: 32,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _buildCompactFilterChip('Zote'),
+                  const SizedBox(width: 6),
+                  _buildCompactFilterChip('self_container'),
+                  const SizedBox(width: 6),
+                  _buildCompactFilterChip('shared'),
+                  const SizedBox(width: 6),
+                  _buildCompactFilterChip('bedsitter'),
+                  const SizedBox(width: 6),
+                  _buildCompactFilterChip('studio'),
+                  const SizedBox(width: 6),
+                  _buildCompactFilterChip('flat'),
+                ],
+              ),
             ),
           ),
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 144,
-            left: 16,
-            right: 16,
+          // Compact stats row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(
               children: [
-                _buildStatPill(
-                  context.tr('Nyumba', en: 'Properties'),
-                  visibleCount.toString(),
+                // Properties count
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.home_rounded, color: Colors.white, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        visibleCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                // University selector (browse mode only)
                 if (widget.mode == PropertyMapMode.browse)
-                  _buildStatPill(
-                    context.tr('Vyuo', en: 'Universities'),
-                    _selectedUniversity == 'Zote' ? 'All' : _selectedUniversity,
+                  GestureDetector(
+                    onTap: _universityMenu,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: surfaceColor.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.school_rounded, color: primaryColor, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            _selectedUniversity == 'Zote' 
+                                ? context.tr('Vyote', en: 'All') 
+                                : _selectedUniversity,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(Icons.expand_more, color: primaryColor, size: 14),
+                        ],
+                      ),
+                    ),
                   ),
               ],
             ),
           ),
-          Positioned(
-            bottom: 96,
-            right: 16,
-            child: FloatingActionButton(
-              onPressed: _isGettingLocation ? null : _determinePosition,
-              backgroundColor: surfaceColor,
-              foregroundColor: primaryColor,
-              child: _isGettingLocation
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location_rounded),
+          // Map area
+          Expanded(
+            child: Stack(
+              children: [
+                mapbox.MapWidget(
+                  key: const ValueKey('mapbox-property-map'),
+                  cameraOptions: mapbox.CameraOptions(
+                    center: mapbox.Point(coordinates: initialCenter),
+                    zoom: 12,
+                  ),
+                  styleUri: mapbox.MapboxStyles.MAPBOX_STREETS,
+                  textureView: true,
+                  onMapCreated: _onMapCreated,
+                  onCameraChangeListener: _onCameraChangeListener,
+                  onTapListener: _handleTap,
+                ),
+                // Current location button (bottom right)
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: FloatingActionButton(
+                      heroTag: 'location',
+                      mini: true,
+                      onPressed: _isGettingLocation ? null : _determinePosition,
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      child: _isGettingLocation
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.my_location_rounded, color: primaryColor, size: 20),
+                    ),
+                  ),
+                ),
+                // Compact bottom summary
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 72,
+                  child: _buildCompactBottomSummary(context, visibleCount),
+                ),
+                if (_isLoading)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+              ],
             ),
           ),
-          Positioned(
-            bottom: 24,
-            left: 16,
-            right: 16,
-            child: _buildBottomSummary(context, visibleCount),
-          ),
-          if (_isLoading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.25),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-            ),
-          if (widget.mode == PropertyMapMode.browse)
-            Positioned(
-              right: 16,
-              top: MediaQuery.of(context).padding.top + 210,
-              child: _universityMenu(),
-            ),
         ],
       ),
     );
@@ -753,113 +849,279 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     );
   }
 
-  Widget _buildStatPill(String title, String value) {
-    return Expanded(
+  Widget _buildCompactFilterChip(String value) {
+    final label = value == 'Zote'
+        ? context.tr('Zote', en: 'All')
+        : value.replaceAll('_', ' ');
+    final selected = _selectedType == value;
+    return FilterChip(
+      label: Text(label, style: const TextStyle(fontSize: 11)),
+      selected: selected,
+      onSelected: (_) {
+        setState(() => _selectedType = value);
+        _refreshAnnotations();
+      },
+      selectedColor: primaryColor,
+      checkmarkColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _buildCompactUniversitySelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: surfaceColor.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.school_rounded, color: primaryColor, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            _selectedUniversity == 'Zote' 
+                ? context.tr('Vyote', en: 'All') 
+                : _selectedUniversity,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.expand_more, color: primaryColor, size: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactBottomSummary(BuildContext context, int visibleCount) {
+    if (_clusters.isEmpty) return const SizedBox.shrink();
+    
+    return GestureDetector(
+      onTap: () {
+        _showPropertyListBottomSheet();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: surfaceColor.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
+          color: surfaceColor.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 10,
-              offset: Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(title, style: TextStyle(color: subtextColor, fontSize: 11)),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
+            Icon(Icons.list_rounded, color: primaryColor, size: 16),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                context.tr(
+                  'Nyumba $visibleCount zimepatikana',
+                  en: '$visibleCount properties found',
+                ),
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
+            Icon(Icons.expand_less, color: subtextColor, size: 16),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBottomSummary(BuildContext context, int visibleCount) {
-    return GestureDetector(
-      onTap: () {
-        if (_clusters.isEmpty) return;
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) {
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _clusters.length,
-              itemBuilder: (context, index) {
-                final spot = _clusters[index].spots.first;
-                return ListTile(
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showPropertyDetails(spot);
-                  },
-                  leading: spot.images.isNotEmpty
-                      ? CircleAvatar(backgroundImage: CachedNetworkImageProvider(spot.images.first))
-                      : CircleAvatar(
-                          backgroundColor: primaryColor.withValues(alpha: 0.1),
-                          child: Icon(Icons.home_rounded, color: primaryColor),
-                        ),
-                  title: Text(spot.brandName.isNotEmpty ? spot.brandName : spot.ownerName),
-                  subtitle: Text(spot.getShortAddress()),
-                  trailing: Text(spot.formattedPrice),
-                );
-              },
-            );
-          },
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(14),
+  String _formatPrice(double price) {
+    if (price >= 1000000) {
+      return '${(price / 1000000).toStringAsFixed(1)}M';
+    } else if (price >= 1000) {
+      return '${(price / 1000).toStringAsFixed(0)}K';
+    }
+    return price.toStringAsFixed(0);
+  }
+
+  void _showPropertyListBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
         decoration: BoxDecoration(
           color: surfaceColor,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 18,
-              offset: Offset(0, 6),
-            ),
-          ],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Row(
-          children: [
-            Icon(Icons.map_rounded, color: primaryColor),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                context.tr(
-                  'Tap property markers to view details and directions',
-                  en: 'Tap property markers to view details and directions',
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Text(
+                      context.tr('Nyumba Zote', en: 'All Properties'),
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-                style: TextStyle(color: textColor, fontSize: 12),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '$visibleCount',
-              style: TextStyle(
-                color: primaryColor,
-                fontWeight: FontWeight.w800,
+              const Divider(height: 1),
+              // Property list
+              Container(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _clusters.length,
+                  itemBuilder: (context, index) {
+                    final cluster = _clusters[index];
+                    final spot = cluster.spots.first;
+                    return _buildPropertyListItem(spot, cluster.spots.length);
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildPropertyListItem(RentalSpot spot, int count) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: surfaceColor.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          // Thumbnail
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: CachedNetworkImage(
+              imageUrl: spot.thumbnailUrl,
+              width: 60,
+              height: 60,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                width: 60,
+                height: 60,
+                color: surfaceColor,
+                child: Icon(Icons.home_rounded, color: subtextColor, size: 24),
+              ),
+              errorWidget: (context, url, error) => Container(
+                width: 60,
+                height: 60,
+                color: surfaceColor,
+                child: Icon(Icons.broken_image, color: subtextColor, size: 24),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Property info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  spot.brandName,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  spot.location,
+                  style: TextStyle(
+                    color: subtextColor,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      spot.formattedPrice,
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (count > 1) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '+${count - 1}',
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // View button
+          IconButton(
+            icon: Icon(Icons.arrow_forward_ios, color: primaryColor, size: 16),
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToPropertyDetail(spot);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToPropertyDetail(RentalSpot spot) {
+    // Navigate to property detail - placeholder for navigation logic
+    // This would typically navigate to RentalDetailScreen or similar
+  }
+
+  void _showPropertyDetails(RentalSpot spot) {
+    // Show property details - placeholder for navigation logic
+    // This would typically navigate to RentalDetailScreen
   }
 }
 
