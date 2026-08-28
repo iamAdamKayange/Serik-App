@@ -8,6 +8,8 @@ import 'package:serik/model/house_data.dart';
 import 'package:serik/model/rental_model.dart';
 import 'package:serik/pages/custom_map_page.dart';
 import 'package:serik/pages/login_page.dart';
+import 'package:serik/pages/app_settings_page.dart';
+import 'package:serik/pages/profile_edit_page.dart';
 import 'package:serik/pages/notification_screen.dart';
 import 'package:serik/pages/rental_home_page.dart';
 import 'package:serik/pages/university_detail_page.dart';
@@ -18,9 +20,6 @@ import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/services/realtime_service.dart';
 import 'package:serik/widgets/saved_house_button.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:serik/utils/app_typography.dart';
-import 'package:serik/utils/responsive_utils.dart';
 
 class HomePage extends StatefulWidget {
   final Function()? onHouseAdded;
@@ -676,11 +675,11 @@ class _HomePageState extends State<HomePage>
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.home_work_rounded,
-                    color: Colors.white,
-                    size: 22,
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Image.asset(
+                    'assets/images/seriki.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
@@ -1537,7 +1536,10 @@ class _HomePageState extends State<HomePage>
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
-          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          final authProvider = Provider.of<AuthProvider>(
+            context,
+            listen: false,
+          );
           if (!authProvider.isLoggedIn) {
             Navigator.push(
               context,
@@ -1836,6 +1838,46 @@ class _HomePageState extends State<HomePage>
             ),
 
             const SizedBox(height: 20),
+
+            if (authProvider.isLoggedIn) ...[
+              _buildSettingTile(
+                icon: Icons.edit_outlined,
+                title: 'Hariri Profaili',
+                subtitle: 'Badilisha jina na namba ya simu',
+                color: const Color(0xFF0EA5E9),
+                isDark: isDark,
+                cardBg: cardBg,
+                textColor: textColor,
+                subtextColor: subtextColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProfileEditPage(),
+                    ),
+                  );
+                },
+              ),
+              _buildSettingTile(
+                icon: Icons.settings_outlined,
+                title: 'Mipangilio',
+                subtitle: 'Privacy, Terms, About na taarifa za app',
+                color: const Color(0xFF8B5CF6),
+                isDark: isDark,
+                cardBg: cardBg,
+                textColor: textColor,
+                subtextColor: subtextColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AppSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // If not logged in, show Login / Register prompt
             if (!authProvider.isLoggedIn) ...[

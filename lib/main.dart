@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:serik/firebase_options.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:provider/provider.dart';
@@ -14,16 +15,22 @@ import 'package:serik/services/realtime_service.dart';
 import 'package:serik/providers/auth_provider.dart';
 import 'package:serik/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Enable secure network communication in release mode
+  // Load .env file
+  await dotenv.load(fileName: ".env");
+
+  // Initialize Mapbox with token from .env
+  final mapboxToken = dotenv.env['MAPBOX_PUBLIC_TOKEN'];
+  if (mapboxToken != null && mapboxToken.isNotEmpty) {
+    MapboxOptions.setAccessToken(mapboxToken);
+  }
+
   if (kReleaseMode) {
-    // Additional security configurations for production
-    debugPrint = (String? message, {int? wrapWidth}) {
-      // Disable debug prints in production
-    };
+    debugPrint = (String? message, {int? wrapWidth}) {};
   }
 
   try {
@@ -33,7 +40,6 @@ Future<void> main() async {
     debugPrint('Firebase initialized successfully');
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
-    // Handle Firebase initialization error gracefully
   }
 
   try {
@@ -50,10 +56,8 @@ Future<void> main() async {
     CsvLocationService.printLoadedRegions();
   } catch (e) {
     debugPrint('Error loading location data: $e');
-    // Continue without location data if it fails
   }
 
-  // Initialize services with error handling
   try {
     RealtimeService.instance.connect();
     debugPrint('Realtime service connected');

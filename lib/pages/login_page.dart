@@ -75,6 +75,8 @@ class _LoginPageState extends State<LoginPage> {
         String lastName = result['lastName'] ?? '';
         String fullName = '$firstName $lastName'.trim();
         String? phone = result['phone'];
+        String? avatarUrl = result['profileImageUrl']?.toString() ??
+            result['profile_image_url']?.toString();
 
         authProvider.login(
           userId: userId,
@@ -83,6 +85,7 @@ class _LoginPageState extends State<LoginPage> {
           userRole: userRole,
           token: result['token'],
           phone: phone,
+          avatarUrl: avatarUrl,
         );
         await NotificationService.instance.syncDeviceToken(userId: userId);
 
@@ -101,6 +104,8 @@ class _LoginPageState extends State<LoginPage> {
 
         if (mounted) {
           if (widget.redirectTo == 'details' && widget.spotId != null) {
+            Navigator.pop(context, true);
+          } else if (widget.redirectTo == 'verification') {
             Navigator.pop(context, true);
           } else {
             _navigateToHomePage(userRole);
@@ -215,41 +220,12 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ],
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Positioned(
-                              top: 22,
-                              right: 22,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.16),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: const Icon(
-                                  Icons.lock_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(22),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.16),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.home_rounded,
-                                size: 72,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Image.asset(
+                            'assets/images/seriki.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                     ),
@@ -576,7 +552,11 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  void _showForgotPasswordDialog() {
+  Future<void> _showForgotPasswordDialog() async {
+    final content = await ApiService.getAppContent();
+    final supportPhone = content?['supportPhone']?.toString() ?? '+255 629 095 954';
+    final supportEmail = content?['supportEmail']?.toString() ?? 'support@serik.co.tz';
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -588,8 +568,8 @@ class _LoginPageState extends State<LoginPage> {
         ),
         content: Text(
           context.tr(
-            'Wasiliana na msimamizi kwa kupiga simu +255 629 095 954\n\nAu tuma ujumbe kwa support@serikapp.com',
-            en: 'Contact the administrator by calling +255 629 095 954\n\nOr send a message to support@serikapp.com',
+            'Wasiliana na msimamizi kwa kupiga simu $supportPhone\n\nAu tuma ujumbe kwa $supportEmail',
+            en: 'Contact the administrator by calling $supportPhone\n\nOr send a message to $supportEmail',
           ),
           style: TextStyle(color: hintTextColor),
         ),

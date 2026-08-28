@@ -140,46 +140,12 @@ class SplashScreen extends HookConsumerWidget {
                           ),
                         ],
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // House Icon
-                          Icon(
-                            Icons.home_rounded,
-                            size: 70,
-                            color: primaryGreen,
-                          ),
-                          // Key Icon with animation
-                          Positioned(
-                            bottom: 20,
-                            child: TweenAnimationBuilder(
-                              tween: Tween<double>(begin: 0, end: 1),
-                              duration: const Duration(milliseconds: 1000),
-                              builder: (context, value, child) {
-                                return Transform.translate(
-                                  offset: Offset(0, -5 * (1 - value)),
-                                  child: Opacity(
-                                    opacity: value,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: primaryGreen.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Icon(
-                                        Icons.key_rounded,
-                                        size: 24,
-                                        color: primaryGreen,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Image.asset(
+                          'assets/images/seriki.png',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   ),

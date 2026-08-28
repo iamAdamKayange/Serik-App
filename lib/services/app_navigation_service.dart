@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/model/rental_model.dart';
+import 'package:serik/pages/landlord_verification_page.dart';
 import 'package:serik/pages/login_page.dart';
+import 'package:serik/pages/notification_screen.dart';
 import 'package:serik/providers/auth_provider.dart';
 import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/services/api_services.dart';
@@ -16,7 +18,20 @@ class AppNavigationService {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
-  static Map<String, dynamic>? _pendingHousePayload;
+  static Map<String, dynamic>? _pendingNotificationPayload;
+
+  static Future<void> openFromNotification(Map<String, dynamic> payload) async {
+    final type = _extractNotificationType(payload);
+    if (type == 'verification') {
+      await _openVerificationTarget(payload);
+      return;
+    }
+    if (type == 'payment' || type == 'maintenance' || type == 'alert') {
+      await _openNotificationCenter(payload);
+      return;
+    }
+    await openHouseFromNotification(payload);
+  }
 
   static Future<void> openHouseFromNotification(
     Map<String, dynamic> payload,
@@ -26,7 +41,7 @@ class AppNavigationService {
 
     final navigator = navigatorKey.currentState;
     if (navigator == null) {
-      _pendingHousePayload = payload;
+      _pendingNotificationPayload = payload;
       return;
     }
 
@@ -77,21 +92,21 @@ class AppNavigationService {
     try {
       final decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic>) {
-        await openHouseFromNotification(decoded);
+        await openFromNotification(decoded);
         return;
       }
     } catch (_) {
-      await openHouseFromNotification({'houseId': payload});
+      await openFromNotification({'houseId': payload});
     }
   }
 
   static Future<void> flushPendingNotificationNavigation() async {
-    final payload = _pendingHousePayload;
+    final payload = _pendingNotificationPayload;
     if (payload == null) return;
-    _pendingHousePayload = null;
+    _pendingNotificationPayload = null;
 
     await Future<void>.delayed(const Duration(milliseconds: 250));
-    await openHouseFromNotification(payload);
+    await openFromNotification(payload);
   }
 
   static String? _extractHouseId(Map<String, dynamic> payload) {
@@ -105,5 +120,64 @@ class AppNavigationService {
     }
 
     return null;
+  }
+
+  static String _extractNotificationType(Map<String, dynamic> payload) {
+    final direct =
+        payload['notificationType'] ?? payload['type'] ?? payload['category'];
+    if (direct != null) return direct.toString().toLowerCase();
+
+    final data = payload['data'];
+    if (data is Map<String, dynamic>) {
+      final nested = data['notificationType'] ??
+          data['type'] ??
+          data['category'];
+      if (nested != null) return nested.toString().toLowerCase();
+    }
+
+    return 'house';
+  }
+
+  static Future<void> _openVerificationTarget(
+    Map<String, dynamic> payload,
+  ) async {
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) {
+      _pendingNotificationPayload = payload;
+      return;
+    }
+
+    final context = navigator.context;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isLoggedIn) {
+      final loggedIn = await navigator.push<bool>(
+        MaterialPageRoute(
+          builder: (_) => const LoginPage(redirectTo: 'verification'),
+        ),
+      );
+      if (loggedIn != true) return;
+    }
+
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => const LandlordVerificationPage(),
+      ),
+    );
+  }
+
+  static Future<void> _openNotificationCenter(
+    Map<String, dynamic> payload,
+  ) async {
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) {
+      _pendingNotificationPayload = payload;
+      return;
+    }
+
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => const NotificationScreen(),
+      ),
+    );
   }
 }

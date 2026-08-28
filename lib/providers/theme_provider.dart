@@ -18,10 +18,9 @@ class ThemeProvider with ChangeNotifier {
   String get languageCode => _locale.languageCode;
 
   bool get isDarkMode {
-    if (_themeMode == ThemeMode.dark) return true;
-    if (_themeMode == ThemeMode.light) return false;
-    // System mode - will be determined by MediaQuery
-    return false; // Default fallback
+    // When using system mode, this should be determined by MediaQuery in the UI
+    // But for immediate access, we'll return the current setting
+    return _themeMode == ThemeMode.dark; 
   }
 
   Future<void> _loadSettings() async {
@@ -58,6 +57,10 @@ class ThemeProvider with ChangeNotifier {
     } else {
       await setThemeMode(ThemeMode.system);
     }
+  }
+
+  Future<void> resetToSystemTheme() async {
+    await setThemeMode(ThemeMode.system);
   }
 
   Future<void> setLocale(Locale locale) async {

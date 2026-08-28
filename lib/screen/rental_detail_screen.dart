@@ -44,6 +44,63 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
     }
   }
 
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    final letters = parts.map((part) => part[0]).take(2).join();
+    return letters.isEmpty ? 'M' : letters.toUpperCase();
+  }
+
+  Widget _buildLandlordAvatar(
+    String ownerName,
+    Color primaryColor, {
+    double radius = 28,
+  }) {
+    final imageUrl = widget.spot.landlordProfileImageUrl;
+    if (imageUrl != null && imageUrl.trim().isNotEmpty) {
+      return ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: imageUrl,
+          width: radius * 2,
+          height: radius * 2,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            width: radius * 2,
+            height: radius * 2,
+            color: primaryColor.withValues(alpha: 0.12),
+            child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+          errorWidget: (_, __, ___) => CircleAvatar(
+            radius: radius,
+            backgroundColor: primaryColor.withValues(alpha: 0.15),
+            child: Text(
+              _initials(ownerName),
+              style: TextStyle(
+                color: primaryColor,
+                fontWeight: FontWeight.bold,
+                fontSize: radius * 0.7,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: primaryColor.withValues(alpha: 0.15),
+      child: Text(
+        _initials(ownerName),
+        style: TextStyle(
+          color: primaryColor,
+          fontWeight: FontWeight.bold,
+          fontSize: radius * 0.7,
+        ),
+      ),
+    );
+  }
+
   void _showLandlordContactModal(
     BuildContext context,
     bool isDark,
@@ -147,20 +204,7 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
                   children: [
                     Row(
                       children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: primaryColor.withValues(alpha: 0.15),
-                          child: Text(
-                            ownerName.isNotEmpty
-                                ? ownerName[0].toUpperCase()
-                                : 'M',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                            ),
-                          ),
-                        ),
+                        _buildLandlordAvatar(ownerName, primaryColor),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(

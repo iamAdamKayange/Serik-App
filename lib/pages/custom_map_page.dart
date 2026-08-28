@@ -21,6 +21,8 @@ import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/services/realtime_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:serik/config/map_config.dart';
+import 'package:serik/pages/mapbox_property_map_page.dart';
 
 // Maeneo ya vyuo – yanaweza kubadilishwa kuwa dynamic kutoka API (kwa sasa ni static)
 const List<Map<String, dynamic>> universities = [
@@ -1474,6 +1476,14 @@ class _CustomMapPageState extends State<CustomMapPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Switch between Google Maps and Mapbox based on config
+    if (MapConfig.useMapbox) {
+      return MapboxPropertyMapPage.browse(
+        selectedUniversity: widget.selectedUniversity,
+      );
+    }
+    
+    // Original Google Maps implementation
     return Scaffold(
       body: Stack(
         children: [

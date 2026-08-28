@@ -74,6 +74,18 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
       final status = await ApiService.getVerificationStatus();
       setState(() {
         _verificationStatus = status;
+        final identityStatus = status?['identityStatus'] as String? ?? 'not_submitted';
+        final propertyStatus = status?['propertyStatus'] as String? ?? 'not_submitted';
+        final canPublish = status?['canPublish'] as bool? ?? false;
+        if (canPublish) {
+          _currentStep = 'complete';
+        } else if (identityStatus != 'verified') {
+          _currentStep = 'identity';
+        } else if (propertyStatus != 'verified') {
+          _currentStep = 'property';
+        } else {
+          _currentStep = 'identity';
+        }
         _isLoading = false;
       });
       _animationController.forward();
@@ -141,10 +153,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
         _ninController.text.isEmpty ||
         _idPhoto == null ||
         _selfie == null) {
-      _showErrorSnackBar(context.tr(
-        'Tafadhali jaza sehemu zote',
-        en: 'Please fill all fields',
-      ));
+      _showErrorSnackBar(
+        context.tr('Tafadhali jaza sehemu zote', en: 'Please fill all fields'),
+      );
       return;
     }
 
@@ -157,17 +168,16 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
         selfie: _selfie!,
         idDocument: _idDocument,
       );
-      _showSuccessSnackBar(context.tr(
-        'Uthibitishaji wa utambulisho umetumwa',
-        en: 'Identity verification submitted',
-      ));
+      _showSuccessSnackBar(
+        context.tr(
+          'Uthibitishaji wa utambulisho umetumwa',
+          en: 'Identity verification submitted',
+        ),
+      );
       setState(() => _currentStep = 'property');
       await _loadVerificationStatus();
     } catch (e) {
-      _showErrorSnackBar(context.tr(
-        'Hitilafu: $e',
-        en: 'Error: $e',
-      ));
+      _showErrorSnackBar(context.tr('Hitilafu: $e', en: 'Error: $e'));
     } finally {
       setState(() => _isSubmitting = false);
     }
@@ -175,10 +185,12 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
 
   Future<void> _submitPropertyVerification() async {
     if (_propertyDocument == null || _propertyPhotos.isEmpty) {
-      _showErrorSnackBar(context.tr(
-        'Tafadhali weka document na picha za mali',
-        en: 'Please upload property document and photos',
-      ));
+      _showErrorSnackBar(
+        context.tr(
+          'Tafadhali weka document na picha za mali',
+          en: 'Please upload property document and photos',
+        ),
+      );
       return;
     }
 
@@ -191,19 +203,62 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
         longitude: _longitude,
         address: _addressController.text,
       );
-      _showSuccessSnackBar(context.tr(
-        'Uthibitishaji wa mali umetumwa',
-        en: 'Property verification submitted',
-      ));
+      _showSuccessSnackBar(
+        context.tr(
+          'Uthibitishaji wa mali umetumwa',
+          en: 'Property verification submitted',
+        ),
+      );
       setState(() => _currentStep = 'complete');
       await _loadVerificationStatus();
     } catch (e) {
-      _showErrorSnackBar(context.tr(
-        'Hitilafu: $e',
-        en: 'Error: $e',
-      ));
+      _showErrorSnackBar(context.tr('Hitilafu: $e', en: 'Error: $e'));
     } finally {
       setState(() => _isSubmitting = false);
+    }
+  }
+
+  bool _hasPendingRequest() {
+    final identityStatus = _verificationStatus?['identityStatus'] as String? ?? 'not_submitted';
+    final propertyStatus = _verificationStatus?['propertyStatus'] as String? ?? 'not_submitted';
+    return identityStatus == 'pending' || propertyStatus == 'pending';
+  }
+
+  Future<void> _cancelVerificationRequest() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+    try {
+      final ok = await ApiService.cancelVerificationRequests();
+      if (!mounted) return;
+      if (ok) {
+        _fullNameController.clear();
+        _ninController.clear();
+        _idPhoto = null;
+        _selfie = null;
+        _idDocument = null;
+        _propertyDocument = null;
+        _propertyPhotos = [];
+        _addressController.clear();
+        _currentStep = 'identity';
+        _showSuccessSnackBar(
+          context.tr(
+            'Ombi la uthibitishaji limecancel na unaweza kuanza upya.',
+            en: 'Verification request cancelled. You can start over now.',
+          ),
+        );
+        await _loadVerificationStatus();
+      } else {
+        _showErrorSnackBar(
+          context.tr(
+            'Imeshindwa ku-cancel ombi. Jaribu tena.',
+            en: 'Could not cancel the request. Please try again.',
+          ),
+        );
+      }
+    } catch (e) {
+      _showErrorSnackBar(context.tr('Hitilafu: $e', en: 'Error: $e'));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -322,19 +377,8 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
                       ),
                     if (_verificationStatus != null) const SizedBox(height: 24),
 
-                    // Content based on current step
-                    if (_currentStep == 'identity')
-                      _buildIdentityVerificationSection(
-                        isDark,
-                        cardColor,
-                        primaryColor,
-                        textColor,
-                        subtextColor,
-                        shadowColor,
-                        isSwahili,
-                      )
-                    else if (_currentStep == 'property')
-                      _buildPropertyVerificationSection(
+                    if (_hasPendingRequest())
+                      _buildPendingRequestSection(
                         isDark,
                         cardColor,
                         primaryColor,
@@ -344,15 +388,37 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
                         isSwahili,
                       )
                     else
-                      _buildCompleteSection(
-                        isDark,
-                        cardColor,
-                        primaryColor,
-                        textColor,
-                        subtextColor,
-                        shadowColor,
-                        isSwahili,
-                      ),
+                    // Content based on current step
+                      if (_currentStep == 'identity')
+                        _buildIdentityVerificationSection(
+                          isDark,
+                          cardColor,
+                          primaryColor,
+                          textColor,
+                          subtextColor,
+                          shadowColor,
+                          isSwahili,
+                        )
+                      else if (_currentStep == 'property')
+                        _buildPropertyVerificationSection(
+                          isDark,
+                          cardColor,
+                          primaryColor,
+                          textColor,
+                          subtextColor,
+                          shadowColor,
+                          isSwahili,
+                        )
+                      else
+                        _buildCompleteSection(
+                          isDark,
+                          cardColor,
+                          primaryColor,
+                          textColor,
+                          subtextColor,
+                          shadowColor,
+                          isSwahili,
+                        ),
                   ],
                 ),
               ),
@@ -495,12 +561,11 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
     final identityStatus = status['identityStatus'] as String?;
     final propertyStatus = status['propertyStatus'] as String?;
     final canPublish = status['canPublish'] as bool? ?? false;
-    
+
     // New fields for retry logic
     final canResubmit = status['canResubmit'] as bool? ?? false;
     final retryAfter = status['retryAfter'] as int? ?? 0;
     final retryReason = status['retryReason'] as String? ?? '';
-    final daysSinceSubmission = status['daysSinceSubmission'] as int? ?? 0;
 
     String statusText = canPublish
         ? (isSwahili ? 'Umethibitishwa ✓' : 'Verified ✓')
@@ -580,7 +645,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
           ),
           const SizedBox(height: 8),
           // Show retry information if verification was rejected
-          if (!canPublish && (identityStatus == 'rejected' || propertyStatus == 'rejected')) ...[
+          if (!canPublish &&
+              (identityStatus == 'rejected' ||
+                  propertyStatus == 'rejected')) ...[
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -601,8 +668,12 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
                       Expanded(
                         child: Text(
                           canResubmit
-                              ? (isSwahili ? 'Unaweza kujaribu tena' : 'You can resubmit')
-                              : (isSwahili ? 'Subiri maombi yako' : 'Please wait before resubmitting'),
+                              ? (isSwahili
+                                    ? 'Unaweza kujaribu tena'
+                                    : 'You can resubmit')
+                              : (isSwahili
+                                    ? 'Subiri maombi yako'
+                                    : 'Please wait before resubmitting'),
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
@@ -737,6 +808,136 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
               ),
               overflow: TextOverflow.ellipsis,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingRequestSection(
+    bool isDark,
+    Color cardColor,
+    Color primaryColor,
+    Color textColor,
+    Color subtextColor,
+    Color shadowColor,
+    bool isSwahili,
+  ) {
+    final identityStatus = _verificationStatus?['identityStatus'] as String? ?? 'not_submitted';
+    final propertyStatus = _verificationStatus?['propertyStatus'] as String? ?? 'not_submitted';
+    final pendingType = identityStatus == 'pending' && propertyStatus == 'pending'
+        ? (isSwahili ? 'Utambulisho + Mali' : 'Identity + Property')
+        : identityStatus == 'pending'
+            ? (isSwahili ? 'Utambulisho' : 'Identity')
+            : (isSwahili ? 'Mali' : 'Property');
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: isDark
+            ? Border.all(color: const Color(0xFF26312D), width: 0.5)
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.pending_actions_rounded, color: primaryColor, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  isSwahili ? 'Ombi Linasubiri' : 'Request Pending',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isSwahili
+                ? 'Una ombi la uthibitishaji la $pendingType linaloendelea. Unaweza kulifuta na kuanza upya.'
+                : 'You have an active $pendingType verification request. You can cancel it and start over.',
+            style: GoogleFonts.poppins(color: subtextColor, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isSwahili
+                ? 'Ukicancel, utaweza kujaza form upya bila ombi la zamani kukuzuia.'
+                : 'If you cancel, you can fill the form again without the old request blocking you.',
+            style: GoogleFonts.poppins(color: subtextColor, fontSize: 12),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isSubmitting ? null : _cancelVerificationRequest,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: primaryColor,
+                    side: BorderSide(color: primaryColor.withValues(alpha: 0.35)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          isSwahili ? 'Cancel Ombi' : 'Cancel Request',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentStep = 'identity';
+                      _verificationStatus = null;
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    isSwahili ? 'Fungua Form' : 'Open Form',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -889,8 +1090,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
           const SizedBox(height: 12),
           _buildDocumentPicker(
             context.tr(
-                'Hati ya Utambulisho (PDF/DOC)',
-                en: 'ID Document (PDF/DOC)'),
+              'Hati ya Utambulisho (PDF/DOC)',
+              en: 'ID Document (PDF/DOC)',
+            ),
             _idDocument,
             _pickIdDocument,
             isDark,
@@ -923,8 +1125,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
                     )
                   : Text(
                       context.tr(
-                          'Tuma Uthibitishaji wa Utambulisho',
-                          en: 'Submit Identity Verification'),
+                        'Tuma Uthibitishaji wa Utambulisho',
+                        en: 'Submit Identity Verification',
+                      ),
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
@@ -993,8 +1196,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
           const SizedBox(height: 16),
           _buildDocumentPicker(
             context.tr(
-                'Hati ya Mali (PDF/DOC)',
-                en: 'Property Document (PDF/DOC)'),
+              'Hati ya Mali (PDF/DOC)',
+              en: 'Property Document (PDF/DOC)',
+            ),
             _propertyDocument,
             _pickPropertyDocument,
             isDark,
@@ -1009,8 +1213,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
               icon: Icon(Icons.photo_library_rounded, color: primaryColor),
               label: Text(
                 context.tr(
-                    'Ongeza Picha za Mali (${_propertyPhotos.length})',
-                    en: 'Add Property Photos (${_propertyPhotos.length})'),
+                  'Ongeza Picha za Mali (${_propertyPhotos.length})',
+                  en: 'Add Property Photos (${_propertyPhotos.length})',
+                ),
                 style: GoogleFonts.poppins(
                   color: primaryColor,
                   fontWeight: FontWeight.w600,
@@ -1107,8 +1312,9 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
                     )
                   : Text(
                       context.tr(
-                          'Tuma Uthibitishaji wa Mali',
-                          en: 'Submit Property Verification'),
+                        'Tuma Uthibitishaji wa Mali',
+                        en: 'Submit Property Verification',
+                      ),
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,

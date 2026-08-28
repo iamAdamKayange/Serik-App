@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/pages/smart_alert_settings_page.dart';
-import 'package:serik/pages/tenant_applications_page.dart';
 import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/services/app_navigation_service.dart';
 import 'package:serik/services/api_services.dart';
@@ -73,6 +72,39 @@ class _NotificationScreenState extends State<NotificationScreen> {
     });
   }
 
+  Future<void> _openNotificationItem(Map<String, dynamic> item) async {
+    final data = item['data'] is Map<String, dynamic>
+        ? item['data'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    final dataType = ((data['notificationType'] ?? item['type'] ?? '')
+            .toString())
+        .toLowerCase();
+    final houseId = item['house_id'] ?? data['houseId'];
+
+    if (dataType == 'verification' ||
+        dataType.startsWith('verification_') ||
+        dataType == 'payment' ||
+        dataType == 'maintenance' ||
+        dataType == 'alert') {
+      await AppNavigationService.openFromNotification({
+        ...data,
+        ...item,
+        if (houseId != null) 'houseId': houseId,
+      });
+      return;
+    }
+
+    if (houseId != null) {
+      await _openNotificationHouse(data: data, houseId: houseId);
+      return;
+    }
+
+    await AppNavigationService.openFromNotification({
+      ...data,
+      ...item,
+    });
+  }
+
   Future<void> _deleteNotification(Object? notificationId) async {
     if (notificationId == null) return;
     final success = await ApiService.deleteNotification(
@@ -96,20 +128,29 @@ class _NotificationScreenState extends State<NotificationScreen> {
     });
   }
 
+  Future<void> _markNotificationRead(Object? notificationId) async {
+    await _deleteNotification(notificationId);
+  }
+
   IconData _getNotificationIcon(String title, String body) {
     final combined = '$title $body'.toLowerCase();
+    if (combined.contains('uthibitishaji') ||
+        combined.contains('verification') ||
+        combined.contains('verify')) {
+      return Icons.verified_user_rounded;
+    }
+    if (combined.contains('payment') ||
+        combined.contains('rent') ||
+        combined.contains('kodi') ||
+        combined.contains('malipo')) {
+      return Icons.payments_rounded;
+    }
     if (combined.contains('ombi') ||
         combined.contains('maombi') ||
         combined.contains('apply') ||
         combined.contains('approved') ||
         combined.contains('imekubaliwa')) {
       return Icons.assignment_turned_in_rounded;
-    }
-    if (combined.contains('kodi') ||
-        combined.contains('malipo') ||
-        combined.contains('rent') ||
-        combined.contains('deposit')) {
-      return Icons.payments_rounded;
     }
     if (combined.contains('ukarabati') ||
         combined.contains('bomba') ||
@@ -121,16 +162,95 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Color _getNotificationColor(String title, String body) {
     final combined = '$title $body'.toLowerCase();
+    if (combined.contains('uthibitishaji') ||
+        combined.contains('verification') ||
+        combined.contains('verify')) {
+      return const Color(0xFF8B5CF6);
+    }
+    if (combined.contains('payment') ||
+        combined.contains('rent') ||
+        combined.contains('kodi') ||
+        combined.contains('malipo')) {
+      return const Color(0xFF2457D6);
+    }
     if (combined.contains('imekubaliwa') || combined.contains('approved')) {
       return const Color(0xFF4CAF50);
-    }
-    if (combined.contains('kodi') || combined.contains('malipo')) {
-      return const Color(0xFF2457D6);
     }
     if (combined.contains('ukarabati')) {
       return const Color(0xFFFF9800);
     }
     return const Color(0xFF0F8B61);
+  }
+
+  Widget _buildActionButtons({
+    required BuildContext context,
+    required Map<String, dynamic> item,
+    required Map<String, dynamic> data,
+    required Object? houseId,
+    required Object? notificationId,
+    required String dataType,
+    required bool isAppNotif,
+    required bool canOpen,
+    required Color notifColor,
+  }) {
+    final buttons = <Widget>[
+      OutlinedButton.icon(
+        onPressed: () => _markNotificationRead(notificationId),
+        icon: const Icon(Icons.done_rounded, size: 18),
+        label: Text(
+          context.tr(
+            'Mark read',
+            en: 'Mark read',
+          ),
+        ),
+      ),
+    ];
+
+    if (isAppNotif) {
+      final primaryLabel = dataType == 'verification' ||
+              dataType.startsWith('verification_')
+          ? context.tr('Verify now', en: 'Verify now')
+          : context.tr('Open', en: 'Open');
+      buttons.insert(
+        0,
+        FilledButton.icon(
+          onPressed: () => _openNotificationItem(item),
+          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+          label: Text(primaryLabel),
+          style: FilledButton.styleFrom(
+            backgroundColor: notifColor,
+            foregroundColor: Colors.white,
+          ),
+        ),
+      );
+    } else if (canOpen) {
+      buttons.insert(
+        0,
+        FilledButton.icon(
+          onPressed: () => _openNotificationHouse(
+            data: data,
+            houseId: houseId,
+          ),
+          icon: const Icon(Icons.home_rounded, size: 18),
+          label: Text(
+            context.tr(
+              'Open house',
+              en: 'Open house',
+            ),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: notifColor,
+            foregroundColor: Colors.white,
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: buttons,
+    );
   }
 
   @override
@@ -349,11 +469,23 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       final canOpen = houseId != null;
                       final title = item['title']?.toString() ?? '';
                       final body = item['body']?.toString() ?? '';
+                      final dataType = ((item['data'] is Map<String, dynamic>
+                              ? item['data']['notificationType']
+                              : null) ??
+                          item['type'] ??
+                          '')
+                          .toString()
+                          .toLowerCase();
                       final notifIcon = _getNotificationIcon(title, body);
                       final notifColor = _getNotificationColor(title, body);
                       final notificationId = item['id']?.toString();
 
-                      final isAppNotif = title.toLowerCase().contains('ombi') ||
+                      final isAppNotif = dataType == 'verification' ||
+                          dataType.startsWith('verification_') ||
+                          dataType == 'payment' ||
+                          dataType == 'maintenance' ||
+                          dataType == 'alert' ||
+                          title.toLowerCase().contains('ombi') ||
                           title.toLowerCase().contains('maombi') ||
                           body.toLowerCase().contains('kubaliwa');
 
@@ -400,20 +532,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(18),
                             onTap: () {
-                              if (isAppNotif) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const TenantApplicationsPage(),
-                                  ),
-                                );
-                              } else if (canOpen) {
-                                _openNotificationHouse(
-                                  data: data,
-                                  houseId: houseId,
-                                );
-                              }
+                              _openNotificationItem(item);
                             },
                             child: Padding(
                               padding: const EdgeInsets.all(16),
@@ -473,12 +592,24 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                             height: 1.35,
                                           ),
                                         ),
+                                        const SizedBox(height: 12),
+                                        _buildActionButtons(
+                                          context: context,
+                                          item: item,
+                                          data: data,
+                                          houseId: houseId,
+                                          notificationId: notificationId,
+                                          dataType: dataType,
+                                          isAppNotif: isAppNotif,
+                                          canOpen: canOpen,
+                                          notifColor: notifColor,
+                                        ),
                                         if (isAppNotif) ...[
                                           const SizedBox(height: 8),
                                           Text(
                                             context.tr(
-                                              'Bofya ili kufuatilia maombi yako →',
-                                              en: 'Tap to track your application →',
+                                              'Bofya kufungua arifa hii →',
+                                              en: 'Tap to open this notification →',
                                             ),
                                             style: TextStyle(
                                               fontSize: 12,

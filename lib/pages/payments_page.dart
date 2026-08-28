@@ -107,8 +107,8 @@ class PaymentsPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Expanded(child: TabBarView(children: [
-            _paymentList(pending, isDark, surface, textCol, subCol, primary, shadow, isSw, false),
-            _paymentList(paid,    isDark, surface, textCol, subCol, primary, shadow, isSw, true),
+            _paymentList(context, pending, isDark, surface, textCol, subCol, primary, shadow, isSw, false),
+            _paymentList(context, paid,    isDark, surface, textCol, subCol, primary, shadow, isSw, true),
           ])),
         ]),
       ),
@@ -136,7 +136,7 @@ class PaymentsPage extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
       ]);
 
-  Widget _paymentList(List<PaymentData> list, bool isDark, Color surface,
+  Widget _paymentList(BuildContext context, List<PaymentData> list, bool isDark, Color surface,
       Color textCol, Color subCol, Color primary, Color shadow,
       bool isSw, bool isPaid) {
     final statusColor = isPaid ? const Color(0xFF22C55E) : const Color(0xFFF59E0B);

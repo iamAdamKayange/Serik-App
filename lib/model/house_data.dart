@@ -73,6 +73,7 @@ class HouseData {
   final String firstName; // brand_name – jina maarufu
   final String lastName; // house_number – namba ya nyumba
   final String phone;
+  final String? landlordProfileImageUrl;
   final double rentPrice;
   final String location; // location_address
 
@@ -133,6 +134,7 @@ class HouseData {
     required this.firstName,
     required this.lastName,
     required this.phone,
+    this.landlordProfileImageUrl,
     required this.rentPrice,
     required this.location,
     required this.images,
@@ -311,6 +313,10 @@ class HouseData {
     return 'TZS ${formatter.format(rentPrice)}';
   }
 
+  String get landlordDisplayName {
+    return name.isNotEmpty ? name : firstName;
+  }
+
   /// Pata deposit formatted
   String get formattedDeposit {
     if (depositAmount == null) return 'Haijabainishwa';
@@ -352,6 +358,7 @@ class HouseData {
       firstName: json['firstName'] ?? json['brand_name'] ?? '',
       lastName: json['lastName'] ?? json['house_number'] ?? '',
       phone: json['phone'] ?? '',
+      landlordProfileImageUrl: json['landlord_profile_image_url']?.toString(),
       rentPrice: _toDouble(json['rentPrice'] ?? json['rent_price']),
       location:
           json['location'] ??
@@ -440,6 +447,7 @@ class HouseData {
       firstName: json['brand_name'] ?? json['firstName'] ?? '',
       lastName: json['house_number'] ?? json['lastName'] ?? '',
       phone: json['phone'] ?? '',
+      landlordProfileImageUrl: json['landlord_profile_image_url']?.toString(),
       rentPrice: _toDouble(json['rent_price'] ?? json['rentPrice']),
       location: json['location_address'] ?? json['location'] ?? '',
       images: [],

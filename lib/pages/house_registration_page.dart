@@ -15,9 +15,11 @@ import 'package:serik/model/house_data.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/widgets/advanced_location_picker.dart';
+import 'package:serik/widgets/mapbox_location_picker.dart';
 import '../providers/theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_compress/video_compress.dart';
+import 'package:serik/config/map_config.dart';
 
 class HouseRegistrationForm extends StatefulWidget {
   final Function(HouseData?)? onHouseAdded;
@@ -1656,28 +1658,41 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    AdvancedLocationPicker(
-                      onLocationSelected:
-                          (
-                            fullAddress,
-                            region,
-                            district,
-                            division,
-                            ward,
-                            village,
-                            street,
-                          ) {
+                    // Switch between CSV picker and Mapbox picker based on config
+                    if (MapConfig.useMapbox)
+                      MapboxLocationPicker(
+                        onChanged: (location) {
+                          if (location != null) {
                             setState(() {
-                              _selectedRegion = region;
-                              _selectedDistrict = district;
-                              _selectedDivision = division;
-                              _selectedWard = ward;
-                              _selectedVillage = village;
-                              _selectedStreet = street;
-                              _locationDescriptionController.text = fullAddress;
+                              _locationDescriptionController.text = 
+                                '${location.latitude}, ${location.longitude}';
                             });
-                          },
-                    ),
+                          }
+                        },
+                      )
+                    else
+                      AdvancedLocationPicker(
+                        onLocationSelected:
+                            (
+                              fullAddress,
+                              region,
+                              district,
+                              division,
+                              ward,
+                              village,
+                              street,
+                            ) {
+                              setState(() {
+                                _selectedRegion = region;
+                                _selectedDistrict = district;
+                                _selectedDivision = division;
+                                _selectedWard = ward;
+                                _selectedVillage = village;
+                                _selectedStreet = street;
+                                _locationDescriptionController.text = fullAddress;
+                              });
+                            },
+                      ),
                     if (_selectedRegion.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Container(

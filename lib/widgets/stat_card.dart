@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import '../providers/theme_provider.dart';
 
 class StatCard extends StatelessWidget {
   final String title;
@@ -62,33 +60,42 @@ class StatCard extends StatelessWidget {
                 ),
                 if (trend != null)
                   Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (trendPositive ?? true)
-                        ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
-                        : const Color(0xFFB45309).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        trendPositive ?? true ? Icons.trending_up : Icons.trending_down,
-                        size: 12,
-                        color: trendPositive ?? true ? const Color(0xFF4CAF50) : const Color(0xFFB45309),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        trend!,
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: trendPositive ?? true ? const Color(0xFF4CAF50) : const Color(0xFFB45309),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (trendPositive ?? true)
+                          ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
+                          : const Color(0xFFB45309).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          trendPositive ?? true
+                              ? Icons.trending_up
+                              : Icons.trending_down,
+                          size: 12,
+                          color: trendPositive ?? true
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFFB45309),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          trend!,
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: trendPositive ?? true
+                                ? const Color(0xFF4CAF50)
+                                : const Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 10),

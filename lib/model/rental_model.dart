@@ -14,6 +14,7 @@ class RentalSpot {
   final String firstName;
   final String lastName;
   final String phone;
+  final String? landlordProfileImageUrl;
   final String? altPhone;
 
   final double rentPrice;
@@ -60,6 +61,7 @@ class RentalSpot {
   String get brandName => firstName;
   String get ownerName => name;
   String get houseNumber => lastName;
+  String get landlordDisplayName => ownerName;
 
   // ==================== CONSTRUCTORS ====================
 
@@ -73,6 +75,7 @@ class RentalSpot {
     required this.firstName,
     required this.lastName,
     required this.phone,
+    this.landlordProfileImageUrl,
     this.altPhone,
     required this.rentPrice,
     required this.location,
@@ -119,6 +122,7 @@ class RentalSpot {
     required String district,
     required String ward,
     required String street,
+    String? landlordProfileImageUrl,
     double? latitude,
     double? longitude,
     List<String>? videos,
@@ -132,6 +136,7 @@ class RentalSpot {
        description = '',
        lastName = '',
        phone = '',
+       landlordProfileImageUrl = landlordProfileImageUrl,
        altPhone = null,
        rentPrice = rentPrice,
        location = location,
@@ -190,6 +195,7 @@ class RentalSpot {
       firstName: house.firstName,
       lastName: house.lastName,
       phone: house.phone,
+      landlordProfileImageUrl: house.landlordProfileImageUrl,
       altPhone: null,
       rentPrice: house.rentPrice,
       location: house.location,
@@ -262,6 +268,8 @@ class RentalSpot {
       district: json['district'] ?? '',
       ward: json['ward'] ?? '',
       street: json['street'] ?? '',
+      landlordProfileImageUrl:
+          json['landlord_profile_image_url']?.toString(),
       latitude: parseLatLng(json['latitude']),
       longitude: parseLatLng(json['longitude']),
       videos: (json['videos'] as List?)?.cast<String>() ?? [],
@@ -478,6 +486,7 @@ class RentalSpot {
     String? firstName,
     String? lastName,
     String? phone,
+    String? landlordProfileImageUrl,
     String? altPhone,
     double? rentPrice,
     String? location,
@@ -523,6 +532,8 @@ class RentalSpot {
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       phone: phone ?? this.phone,
+      landlordProfileImageUrl:
+          landlordProfileImageUrl ?? this.landlordProfileImageUrl,
       altPhone: altPhone ?? this.altPhone,
       rentPrice: rentPrice ?? this.rentPrice,
       location: location ?? this.location,

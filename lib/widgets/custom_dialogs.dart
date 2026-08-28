@@ -5,7 +5,7 @@ import 'package:serik/l10n/app_localization.dart';
 
 class CustomDialogs {
   static void showSuccess(BuildContext context, String message) {
-    final theme = Theme.of(context);
+    Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -49,7 +49,7 @@ class CustomDialogs {
   }
 
   static void showError(BuildContext context, String message) {
-    final theme = Theme.of(context);
+    Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -119,7 +119,9 @@ class CustomDialogs {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: theme.brightness == Brightness.dark ? 0.2 : 0.1),
+                color: primaryColor.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.2 : 0.1,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.account_circle, size: 28, color: primaryColor),
@@ -230,7 +232,9 @@ class CustomDialogs {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: theme.brightness == Brightness.dark ? 0.2 : 0.1),
+                color: primaryColor.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.2 : 0.1,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.person, size: 24, color: primaryColor),

@@ -13,6 +13,8 @@ import 'package:serik/pages/admin_map_page.dart';
 import 'package:serik/pages/notification_screen.dart';
 import 'package:serik/pages/video_feed_page.dart';
 import 'package:serik/pages/university_detail_page.dart';
+import 'package:serik/pages/profile_edit_page.dart';
+import 'package:serik/pages/app_settings_page.dart';
 import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/pages/house_registration_page.dart';
 import 'package:serik/pages/houses_page.dart';
@@ -150,6 +152,20 @@ class AppRouter {
               child: const TenantApplicationsPage(),
             ),
           ),
+          GoRoute(
+            path: 'settings',
+            pageBuilder: (context, state) => MaterialPage(
+              key: state.pageKey,
+              child: const AppSettingsPage(),
+            ),
+          ),
+          GoRoute(
+            path: 'profile/edit',
+            pageBuilder: (context, state) => MaterialPage(
+              key: state.pageKey,
+              child: const ProfileEditPage(),
+            ),
+          ),
         ],
       ),
 
@@ -221,6 +237,20 @@ class AppRouter {
             pageBuilder: (context, state) => MaterialPage(
               key: state.pageKey,
               child: const SmartAlertSettingsPage(),
+            ),
+          ),
+          GoRoute(
+            path: 'settings',
+            pageBuilder: (context, state) => MaterialPage(
+              key: state.pageKey,
+              child: const AppSettingsPage(),
+            ),
+          ),
+          GoRoute(
+            path: 'profile/edit',
+            pageBuilder: (context, state) => MaterialPage(
+              key: state.pageKey,
+              child: const ProfileEditPage(),
             ),
           ),
         ],

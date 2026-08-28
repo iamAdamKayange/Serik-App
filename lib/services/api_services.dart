@@ -150,6 +150,70 @@ class ApiService {
     }
   }
 
+  /// Update current user profile
+  static Future<Map<String, dynamic>?> updateMe({
+    String? firstName,
+    String? lastName,
+    String? phone,
+    XFile? avatarFile,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/auth/me');
+      if (avatarFile == null) {
+        final headers = await _getHeaders();
+        final response = await http
+            .put(
+              url,
+              headers: headers,
+              body: jsonEncode({
+                if (firstName != null) 'firstName': firstName,
+                if (lastName != null) 'lastName': lastName,
+                if (phone != null) 'phone': phone,
+              }),
+            )
+            .timeout(timeout);
+
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+        debugPrint('⚠️ updateMe failed: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+
+      final headers = await _getHeaders();
+      headers.remove('Content-Type');
+
+      final request = http.MultipartRequest('PUT', url);
+      request.headers.addAll(headers);
+      if (firstName != null) request.fields['firstName'] = firstName;
+      if (lastName != null) request.fields['lastName'] = lastName;
+      if (phone != null) request.fields['phone'] = phone;
+
+      final mimeType = lookupMimeType(avatarFile.path);
+      final mediaType = mimeType != null ? MediaType.parse(mimeType) : null;
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'avatar',
+          avatarFile.path,
+          contentType: mediaType,
+          filename: path.basename(avatarFile.path),
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      debugPrint('⚠️ updateMe failed: ${response.statusCode} - ${response.body}');
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ updateMe error: $e');
+      return null;
+    }
+  }
+
   /// Logout - clear stored token
   static Future<void> logout() async {
     debugPrint('🔓 Logging out');
@@ -310,7 +374,11 @@ class ApiService {
     if (token != null) {
       try {
         final payload = _parseJwt(token);
+        final userId = payload['id']?.toString();
         final userRole = payload['role'] as String?;
+        if (userId != null && userId.isNotEmpty) {
+          queryParameters['userId'] = userId;
+        }
         if (userRole != null) {
           queryParameters['userRole'] = userRole;
         }
@@ -963,6 +1031,18 @@ class ApiService {
     }
   }
 
+  static Future<bool> cancelIdentityVerification() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/identity/cancel');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ cancelIdentityVerification error: $e');
+      return false;
+    }
+  }
+
   /// Submit identity verification
   static Future<bool> submitIdentityVerification({
     required String fullName,
@@ -1110,6 +1190,31 @@ class ApiService {
     }
   }
 
+  static Future<bool> cancelPropertyVerification() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/property/cancel');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ cancelPropertyVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Cancel any active verification requests (identity/property)
+  static Future<bool> cancelVerificationRequests() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/cancel');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ cancelVerificationRequests error: $e');
+      return false;
+    }
+  }
+
   /// Get property verification status
   static Future<Map<String, dynamic>?> getPropertyVerificationStatus() async {
     try {
@@ -1209,6 +1314,22 @@ class ApiService {
     } catch (e) {
       debugPrint('❌ reviewPropertyVerification error: $e');
       return false;
+    }
+  }
+
+  /// Get app policy/content data from backend
+  static Future<Map<String, dynamic>?> getAppContent() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/content/app-settings');
+      final response = await http.get(url).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      debugPrint('⚠️ getAppContent: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ getAppContent error: $e');
+      return null;
     }
   }
 

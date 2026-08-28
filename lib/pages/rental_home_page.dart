@@ -4,13 +4,16 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/pages/admin_map_page.dart';
+import 'package:serik/pages/app_settings_page.dart';
 import 'package:serik/pages/home_page.dart';
 import 'package:serik/pages/house_registration_page.dart';
 import 'package:serik/pages/houses_page.dart';
 import 'package:serik/pages/landlord_verification_page.dart';
 import 'package:serik/pages/notification_screen.dart';
+import 'package:serik/pages/profile_edit_page.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/model/house_data.dart';
+import 'package:serik/utils/app_typography.dart';
 import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
 import '../model/tenant_model.dart';
@@ -34,15 +37,12 @@ class RentalHomePage extends StatefulWidget {
 class _RentalHomePageState extends State<RentalHomePage>
     with SingleTickerProviderStateMixin {
   // Color constants
-  static const _darkPrimary  = Color(0xFF46D39A);
+  static const _darkPrimary = Color(0xFF46D39A);
   static const _lightPrimary = Color(0xFF0F8B61);
-  static const _darkBg       = Color(0xFF0A0F0D);
-  static const _lightBg      = Color(0xFFF4F6F5);
-  static const _darkSurface  = Color(0xFF141A17);
-  static const _lightSurface = Color(0xFFFFFFFF);
-  static const _darkText     = Color(0xFFF0F5F2);
-  static const _lightText    = Color(0xFF111C17);
-  static const _darkSubtext  = Color(0xFF8A9490);
+  static const _darkSurface = Color(0xFF141A17);
+  static const _darkText = Color(0xFFF0F5F2);
+  static const _lightText = Color(0xFF111C17);
+  static const _darkSubtext = Color(0xFF8A9490);
   static const _lightSubtext = Color(0xFF5E6E68);
 
   List<HouseData> houses = [];
@@ -81,16 +81,24 @@ class _RentalHomePageState extends State<RentalHomePage>
   Future<void> _refreshData() async {
     setState(() => _isLoading = true);
     try {
-      final fetchedHousesData = await ApiService.getMyHouses();
+      final results = await Future.wait([
+        ApiService.getMyHouses(),
+        ApiService.getVerificationStatus(),
+      ]);
+      final fetchedHousesData = results[0] as List<dynamic>;
+      final verificationStatus = results[1] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(results[1] as Map)
+          : null;
       if (!mounted) return;
       final List<HouseData> fetchedHouses = fetchedHousesData
           .map((json) => HouseData.fromJson(json as Map<String, dynamic>))
           .toList();
-      final verificationStatus = await ApiService.getVerificationStatus();
       setState(() {
         houses = fetchedHouses;
         _verificationStatus = verificationStatus;
-        _loadSampleData();
+        tenants = [];
+        payments = [];
+        maintenanceRequests = [];
         _calculateStats();
         _checkProfileStatus();
         _isLoading = false;
@@ -116,96 +124,6 @@ class _RentalHomePageState extends State<RentalHomePage>
       _isProfileComplete = _verificationStatus!['canPublish'] as bool? ?? false;
     } else {
       _isProfileComplete = authProvider.isProfileComplete;
-    }
-  }
-
-  void _loadSampleData() {
-    tenants = [];
-    if (houses.isNotEmpty) {
-      tenants.add(
-        TenantData(
-          id: '1',
-          name: 'Adam Kayange',
-          phone: '0712345678',
-          houseId: houses[0].id,
-          houseName: houses[0].name,
-          rentAmount: houses[0].rentPrice,
-          startDate: DateTime.now().subtract(const Duration(days: 60)),
-          endDate: DateTime.now().add(const Duration(days: 305)),
-          status: 'Active',
-        ),
-      );
-    }
-    if (houses.length > 1) {
-      tenants.add(
-        TenantData(
-          id: '2',
-          name: 'Yusuph Mwashi',
-          phone: '0755123456',
-          houseId: houses[1].id,
-          houseName: houses[1].name,
-          rentAmount: houses[1].rentPrice,
-          startDate: DateTime.now().subtract(const Duration(days: 30)),
-          endDate: DateTime.now().add(const Duration(days: 335)),
-          status: 'Active',
-        ),
-      );
-    }
-    payments = [];
-    if (tenants.isNotEmpty) {
-      payments.add(
-        PaymentData(
-          id: '1',
-          tenantName: tenants[0].name,
-          tenantId: tenants[0].id,
-          amount: tenants[0].rentAmount,
-          date: DateTime.now().subtract(const Duration(days: 5)),
-          status: 'Paid',
-          month: DateFormat('MMMM yyyy').format(DateTime.now()),
-        ),
-      );
-    }
-    if (tenants.length > 1) {
-      payments.add(
-        PaymentData(
-          id: '2',
-          tenantName: tenants[1].name,
-          tenantId: tenants[1].id,
-          amount: tenants[1].rentAmount,
-          date: DateTime.now().subtract(const Duration(days: 2)),
-          status: 'Pending',
-          month: DateFormat('MMMM yyyy').format(DateTime.now()),
-        ),
-      );
-    }
-    maintenanceRequests = [];
-    if (houses.isNotEmpty) {
-      maintenanceRequests.add(
-        MaintenanceData(
-          id: '1',
-          tenantName: tenants.isNotEmpty ? tenants[0].name : context.tr('Mpangaji', en: 'Tenant'),
-          houseName: houses[0].name,
-          issue: context.tr('Mfereji unatoboka', en: 'Pipe leaking'),
-          priority: 'High',
-          status: 'Inasubiri',
-          date: DateTime.now().subtract(const Duration(days: 2)),
-          assignedTo: 'Fundi Juma',
-        ),
-      );
-    }
-    if (houses.length > 1) {
-      maintenanceRequests.add(
-        MaintenanceData(
-          id: '2',
-          tenantName: tenants.length > 1 ? tenants[1].name : context.tr('Mpangaji', en: 'Tenant'),
-          houseName: houses[1].name,
-          issue: context.tr('Taa haiwashi', en: 'Light not working'),
-          priority: 'Medium',
-          status: 'Inarudiwa',
-          date: DateTime.now().subtract(const Duration(days: 1)),
-          assignedTo: 'Fundi Ali',
-        ),
-      );
     }
   }
 
@@ -380,6 +298,63 @@ class _RentalHomePageState extends State<RentalHomePage>
                 ),
               ),
               const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileEditPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: Text(
+                        context.tr('Hariri Profaili', en: 'Edit Profile'),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: subCol,
+                        side: BorderSide(color: subCol.withValues(alpha: 0.3)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AppSettingsPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.settings_outlined, size: 18),
+                      label: Text(
+                        context.tr('Mipangilio', en: 'Settings'),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: subCol,
+                        side: BorderSide(color: subCol.withValues(alpha: 0.3)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               Row(
                 children: [
                   Expanded(
@@ -565,10 +540,12 @@ class _RentalHomePageState extends State<RentalHomePage>
               color: primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              Icons.home_work_rounded,
-              size: 22,
-              color: primary,
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Image.asset(
+                'assets/images/seriki.png',
+                fit: BoxFit.contain,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -813,6 +790,7 @@ class _RentalHomePageState extends State<RentalHomePage>
               context.tr('Nyumba Zangu', en: 'My Properties'),
               primary,
               textCol,
+              center: true,
             ),
             const SizedBox(height: 12),
             _carousel(isDark, primary),
@@ -838,27 +816,57 @@ class _RentalHomePageState extends State<RentalHomePage>
     );
   }
 
-  Widget _sectionTitle(String title, Color primary, Color textCol) => Row(
-    children: [
-      Container(
-        width: 4,
-        height: 18,
-        decoration: BoxDecoration(
-          color: primary,
-          borderRadius: BorderRadius.circular(4),
-        ),
+  Widget _sectionTitle(
+    String title,
+    Color primary,
+    Color textCol, {
+    bool center = false,
+  }) {
+    final titleWidget = Text(
+      title,
+      style: GoogleFonts.poppins(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        color: textCol,
       ),
-      const SizedBox(width: 10),
-      Text(
-        title,
-        style: GoogleFonts.poppins(
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
-          color: textCol,
+      textAlign: center ? TextAlign.center : TextAlign.start,
+    );
+
+    if (center) {
+      return Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 4,
+              height: 18,
+              decoration: BoxDecoration(
+                color: primary,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 10),
+            titleWidget,
+          ],
         ),
-      ),
-    ],
-  );
+      );
+    }
+
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: primary,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 10),
+        titleWidget,
+      ],
+    );
+  }
 
   // ── WELCOME BANNER ───────────────────────────────────────────────────────
   Widget _welcomeBanner(bool isDark, Color primary, String name) {
@@ -982,42 +990,42 @@ class _RentalHomePageState extends State<RentalHomePage>
           _verificationStatus!['propertyStatus'] as String? ?? 'pending';
 
       if (canPublish) {
-        statusText = context.tr('Umethibitishwa ✓', en: 'Verified ✓');
+        statusText = isSw ? 'Umethibitishwa ✓' : 'Verified ✓';
         gradStart = const Color(0xFF4CAF50);
         gradEnd = const Color(0xFF81C784);
-        message = context.tr(
-            'Unaweza kuweka nyumba zako sasa',
-            en: 'You can now list your properties');
-        buttonText = context.tr('Angalia Nyumba', en: 'View Properties');
+        message = isSw
+            ? 'Unaweza kuweka nyumba zako sasa'
+            : 'You can now list your properties';
+        buttonText = isSw ? 'Angalia Nyumba' : 'View Properties';
       } else {
         gradStart = const Color(0xFFF59E0B);
         gradEnd = const Color(0xFFFBBF24);
-        statusText = context.tr('Inasubiri Uthibitishaji', en: 'Needs Verification');
+        statusText = isSw ? 'Inasubiri Uthibitishaji' : 'Needs Verification';
         if (identitySt == 'pending' && propertySt == 'pending') {
-          message = context.tr(
-              'Thibitisha utambulisho wako',
-              en: 'Verify your identity to list properties');
-          buttonText = context.tr('Thibitisha', en: 'Verify Now');
+          message = isSw
+              ? 'Thibitisha utambulisho wako'
+              : 'Verify your identity to list properties';
+          buttonText = isSw ? 'Thibitisha' : 'Verify Now';
         } else if (identitySt == 'verified' && propertySt == 'pending') {
-          message = context.tr(
-              'Thibitisha mali yako',
-              en: 'Verify your property to list it');
-          buttonText = context.tr('Thibitisha Mali', en: 'Verify Property');
+          message = isSw
+              ? 'Thibitisha mali yako'
+              : 'Verify your property to list it';
+          buttonText = isSw ? 'Thibitisha Mali' : 'Verify Property';
         } else {
-          message = context.tr(
-              'Inasubiri ukaguzi wa admin',
-              en: 'Awaiting admin review');
-          buttonText = context.tr('Angalia Hali', en: 'Check Status');
+          message = isSw
+              ? 'Inasubiri ukaguzi wa admin'
+              : 'Awaiting admin review';
+          buttonText = isSw ? 'Angalia Hali' : 'Check Status';
         }
       }
     } else {
-      statusText = context.tr('Kamilisha Uthibitishaji', en: 'Complete Verification');
+      statusText = isSw ? 'Kamilisha Uthibitishaji' : 'Complete Verification';
       gradStart = const Color(0xFFF59E0B);
       gradEnd = const Color(0xFFFBBF24);
-      message = context.tr(
-          'Thibitisha utambulisho wako ili kuweka nyumba',
-          en: 'Verify your identity to publish properties');
-      buttonText = context.tr('Thibitisha', en: 'Complete Verification');
+      message = isSw
+          ? 'Thibitisha utambulisho wako ili kuweka nyumba'
+          : 'Verify your identity to publish properties';
+      buttonText = isSw ? 'Thibitisha' : 'Complete Verification';
     }
 
     return Container(
@@ -1076,27 +1084,32 @@ class _RentalHomePageState extends State<RentalHomePage>
             ),
           ),
           const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const LandlordVerificationPage(),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LandlordVerificationPage(),
+                ),
               ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: gradStart,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: gradStart,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            ),
-            child: Text(
-              buttonText,
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+              child: Text(
+                buttonText,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),

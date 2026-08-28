@@ -12,6 +12,8 @@ import 'package:serik/services/api_services.dart';
 import 'package:serik/pages/house_registration_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/theme_provider.dart';
+import 'package:serik/config/map_config.dart';
+import 'package:serik/pages/mapbox_property_map_page.dart';
 
 class AdminMapPage extends StatefulWidget {
   final HouseData? newlyAddedHouse;
@@ -793,6 +795,12 @@ class _AdminMapPageState extends State<AdminMapPage> {
   // ---------- UI Build ----------
   @override
   Widget build(BuildContext context) {
+    // Switch between Google Maps and Mapbox based on config
+    if (MapConfig.useMapbox) {
+      return MapboxPropertyMapPage.landlord();
+    }
+    
+    // Original Google Maps implementation
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
     Color primaryColor = isDarkMode
