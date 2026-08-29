@@ -1732,7 +1732,7 @@ class _HomePageState extends State<HomePage>
     Color textColor,
     Color subtextColor,
   ) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authProvider = context.watch<AuthProvider>();
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
@@ -1777,17 +1777,22 @@ class _HomePageState extends State<HomePage>
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: primaryColor,
-                    child: Text(
-                      (authProvider.userName?.isNotEmpty == true
-                              ? authProvider.userName![0]
-                              : 'U')
-                          .toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    backgroundImage: authProvider.avatarUrl != null && authProvider.avatarUrl!.isNotEmpty
+                        ? NetworkImage(authProvider.avatarUrl!)
+                        : null,
+                    child: authProvider.avatarUrl == null || authProvider.avatarUrl!.isEmpty
+                        ? Text(
+                            (authProvider.userName?.isNotEmpty == true
+                                    ? authProvider.userName![0]
+                                    : 'U')
+                                .toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
