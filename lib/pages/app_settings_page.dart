@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:serik/l10n/app_localization.dart';
+import 'package:serik/providers/auth_provider.dart';
 import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/pages/profile_edit_page.dart';
@@ -50,6 +51,13 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
     return value?.toString() ?? '';
   }
 
+  String _localized(dynamic value, String locale) {
+    if (value is Map<String, dynamic>) {
+      return value[locale]?.toString() ?? value['en']?.toString() ?? value['sw']?.toString() ?? '';
+    }
+    return value?.toString() ?? '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
@@ -74,37 +82,143 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [primary, primary.withValues(alpha: 0.75)],
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _content?['appName']?.toString() ?? 'Serik',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _localizedText(_content?['aboutUs']?['body'], locale),
-                        style: GoogleFonts.poppins(
-                          color: Colors.white.withValues(alpha: 0.88),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                // Preferences Section
+                _SectionHeader(
+                  title: l10n.tr('Preferences', en: 'Preferences'),
+                  isDark: isDark,
+                  text: text,
+                ),
+                const SizedBox(height: 8),
+                _SettingsTile(
+                  title: l10n.tr('Language', en: 'Language'),
+                  subtitle: l10n.tr('Change app language', en: 'Change app language'),
+                  icon: Icons.language_rounded,
+                  onTap: () {
+                    // TODO: Implement language selection
+                  },
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                ),
+                _SettingsTile(
+                  title: l10n.tr('Appearance', en: 'Appearance'),
+                  subtitle: l10n.tr('Dark mode', en: 'Dark mode'),
+                  icon: Icons.palette_rounded,
+                  onTap: () {
+                    context.read<ThemeProvider>().toggleTheme();
+                  },
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                  trailing: Switch(
+                    value: isDark,
+                    onChanged: (_) => context.read<ThemeProvider>().toggleTheme(),
+                    activeColor: primary,
                   ),
                 ),
-                const SizedBox(height: 16),
+                _SettingsTile(
+                  title: l10n.tr('Notifications', en: 'Notifications'),
+                  subtitle: l10n.tr('Manage notifications', en: 'Manage notifications'),
+                  icon: Icons.notifications_rounded,
+                  onTap: () {
+                    // TODO: Implement notification settings
+                  },
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                ),
+                _SettingsTile(
+                  title: l10n.tr('Location', en: 'Location'),
+                  subtitle: l10n.tr('Location services', en: 'Location services'),
+                  icon: Icons.location_on_rounded,
+                  onTap: () {
+                    // TODO: Implement location settings
+                  },
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                ),
+                const SizedBox(height: 24),
+
+                // Support Section
+                _SectionHeader(
+                  title: l10n.tr('Support', en: 'Support'),
+                  isDark: isDark,
+                  text: text,
+                ),
+                const SizedBox(height: 8),
+                _SettingsTile(
+                  title: l10n.tr('Help & Support', en: 'Help & Support'),
+                  subtitle: l10n.tr('Get help', en: 'Get help'),
+                  icon: Icons.help_rounded,
+                  onTap: () => _openUrl(
+                    _content?['supportUrl']?.toString() ?? 'https://serik.co.tz/support',
+                  ),
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                ),
+                _SettingsTile(
+                  title: l10n.tr('Terms & Conditions', en: 'Terms & Conditions'),
+                  subtitle: l10n.tr('Terms of service', en: 'Terms of service'),
+                  icon: Icons.description_rounded,
+                  onTap: () => _showPolicyDialog(
+                    context,
+                    _localizedText(_content?['termsOfService']?['title'], locale),
+                    _content?['termsOfService']?['sections'] as List<dynamic>? ?? const [],
+                    locale,
+                    isDark,
+                    card,
+                    text,
+                    sub,
+                    primary,
+                  ),
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                ),
+                _SettingsTile(
+                  title: l10n.tr('Privacy Policy', en: 'Privacy Policy'),
+                  subtitle: l10n.tr('Privacy policy', en: 'Privacy policy'),
+                  icon: Icons.privacy_tip_rounded,
+                  onTap: () => _showPolicyDialog(
+                    context,
+                    _localizedText(_content?['privacyPolicy']?['title'], locale),
+                    _content?['privacyPolicy']?['sections'] as List<dynamic>? ?? const [],
+                    locale,
+                    isDark,
+                    card,
+                    text,
+                    sub,
+                    primary,
+                  ),
+                  isDark: isDark,
+                  card: card,
+                  text: text,
+                  sub: sub,
+                  primary: primary,
+                ),
+                const SizedBox(height: 24),
+
+                // Account Section
+                _SectionHeader(
+                  title: l10n.tr('Account', en: 'Account'),
+                  isDark: isDark,
+                  text: text,
+                ),
+                const SizedBox(height: 8),
                 _ActionCard(
                   title: l10n.tr('Hariri Profaili', en: 'Edit Profile'),
                   subtitle: l10n.tr(
@@ -123,42 +237,21 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                   primary: primary,
                 ),
                 const SizedBox(height: 12),
-                _LinkTile(
-                  title: l10n.tr('Tovuti Rasmi', en: 'Official Website'),
-                  value: _content?['websiteUrl']?.toString() ?? 'https://serik.co.tz',
-                  icon: Icons.language_rounded,
-                  onTap: () => _openUrl(
-                    _content?['websiteUrl']?.toString() ?? 'https://serik.co.tz',
-                  ),
+                _SettingsTile(
+                  title: l10n.tr('Logout', en: 'Logout'),
+                  subtitle: l10n.tr('Sign out of your account', en: 'Sign out of your account'),
+                  icon: Icons.logout_rounded,
+                  onTap: () => _showLogoutDialog(context, isDark, card, text, sub, primary),
                   isDark: isDark,
                   card: card,
                   text: text,
                   sub: sub,
                   primary: primary,
+                  showWarning: true,
                 ),
-                const SizedBox(height: 16),
-                _PolicySection(
-                  title: _localizedText(_content?['privacyPolicy']?['title'], locale),
-                  sections: _content?['privacyPolicy']?['sections'] as List<dynamic>? ?? const [],
-                  locale: locale,
-                  isDark: isDark,
-                  card: card,
-                  text: text,
-                  sub: sub,
-                  primary: primary,
-                ),
-                const SizedBox(height: 16),
-                _PolicySection(
-                  title: _localizedText(_content?['termsOfService']?['title'], locale),
-                  sections: _content?['termsOfService']?['sections'] as List<dynamic>? ?? const [],
-                  locale: locale,
-                  isDark: isDark,
-                  card: card,
-                  text: text,
-                  sub: sub,
-                  primary: primary,
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+
+                // About
                 _AboutCard(
                   title: _localizedText(_content?['aboutUs']?['title'], locale),
                   body: _localizedText(_content?['aboutUs']?['body'], locale),
@@ -172,6 +265,226 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                 ),
               ],
             ),
+    );
+  }
+
+  void _showPolicyDialog(
+    BuildContext context,
+    String title,
+    List<dynamic> sections,
+    String locale,
+    bool isDark,
+    Color card,
+    Color text,
+    Color sub,
+    Color primary,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: card,
+        title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: sections.length,
+            itemBuilder: (context, index) {
+              final map = sections[index] as Map<String, dynamic>;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _localized(map['title'], locale),
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: primary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _localized(map['body'], locale),
+                      style: GoogleFonts.poppins(color: sub, fontSize: 12.5, height: 1.4),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: GoogleFonts.poppins(color: primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(
+    BuildContext context,
+    bool isDark,
+    Color card,
+    Color text,
+    Color sub,
+    Color primary,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: card,
+        title: Text(
+          'Logout',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        ),
+        content: Text(
+          'Are you sure you want to logout?',
+          style: GoogleFonts.poppins(color: sub),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: sub),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.read<AuthProvider>().logout();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primary,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(
+              'Logout',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.isDark,
+    required this.text,
+  });
+
+  final String title;
+  final bool isDark;
+  final Color text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(
+        title,
+        style: GoogleFonts.poppins(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: text.withValues(alpha: 0.6),
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+    required this.isDark,
+    required this.card,
+    required this.text,
+    required this.sub,
+    required this.primary,
+    this.trailing,
+    this.showWarning = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isDark;
+  final Color card;
+  final Color text;
+  final Color sub;
+  final Color primary;
+  final Widget? trailing;
+  final bool showWarning;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: card,
+          border: Border(
+            bottom: BorderSide(
+              color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: showWarning ? Colors.red : primary,
+              size: 22,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w500,
+                      color: showWarning ? Colors.red : text,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.poppins(
+                      color: sub,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null) trailing!,
+            if (trailing == null)
+              Icon(
+                Icons.chevron_right_rounded,
+                color: sub,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -246,111 +559,6 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _LinkTile extends StatelessWidget {
-  const _LinkTile({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.onTap,
-    required this.isDark,
-    required this.card,
-    required this.text,
-    required this.sub,
-    required this.primary,
-  });
-
-  final String title;
-  final String value;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isDark;
-  final Color card;
-  final Color text;
-  final Color sub;
-  final Color primary;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      tileColor: card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      leading: Icon(icon, color: primary),
-      title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: text)),
-      subtitle: Text(value, style: GoogleFonts.poppins(color: sub, fontSize: 12)),
-      trailing: Icon(Icons.open_in_new_rounded, color: sub, size: 18),
-    );
-  }
-}
-
-class _PolicySection extends StatelessWidget {
-  const _PolicySection({
-    required this.title,
-    required this.sections,
-    required this.locale,
-    required this.isDark,
-    required this.card,
-    required this.text,
-    required this.sub,
-    required this.primary,
-  });
-
-  final String title;
-  final List<dynamic> sections;
-  final String locale;
-  final bool isDark;
-  final Color card;
-  final Color text;
-  final Color sub;
-  final Color primary;
-
-  String _localized(dynamic value) {
-    if (value is Map<String, dynamic>) {
-      return value[locale]?.toString() ?? value['en']?.toString() ?? value['sw']?.toString() ?? '';
-    }
-    return value?.toString() ?? '';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: text, fontSize: 16)),
-          const SizedBox(height: 10),
-          ...sections.map((section) {
-            final map = section as Map<String, dynamic>;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_localized(map['title']), style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: primary)),
-                  const SizedBox(height: 4),
-                  Text(_localized(map['body']), style: GoogleFonts.poppins(color: sub, fontSize: 12.5, height: 1.4)),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
 class _AboutCard extends StatelessWidget {
   const _AboutCard({
     required this.title,
@@ -396,9 +604,21 @@ class _AboutCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(body, style: GoogleFonts.poppins(color: sub, fontSize: 12.5, height: 1.4)),
           const SizedBox(height: 12),
-          Text('support: $supportEmail', style: GoogleFonts.poppins(color: primary, fontSize: 12)),
+          Row(
+            children: [
+              Icon(Icons.email_rounded, color: primary, size: 16),
+              const SizedBox(width: 8),
+              Text(supportEmail, style: GoogleFonts.poppins(color: primary, fontSize: 12)),
+            ],
+          ),
           const SizedBox(height: 4),
-          Text('phone: $supportPhone', style: GoogleFonts.poppins(color: primary, fontSize: 12)),
+          Row(
+            children: [
+              Icon(Icons.phone_rounded, color: primary, size: 16),
+              const SizedBox(width: 8),
+              Text(supportPhone, style: GoogleFonts.poppins(color: primary, fontSize: 12)),
+            ],
+          ),
         ],
       ),
     );

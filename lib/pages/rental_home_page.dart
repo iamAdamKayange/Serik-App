@@ -792,6 +792,14 @@ class _RentalHomePageState extends State<RentalHomePage>
           isDark,
           () => tp.toggleTheme(),
         ),
+        _navIcon(
+          Icons.settings_outlined,
+          isDark,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AppSettingsPage()),
+          ),
+        ),
         Consumer<AuthProvider>(
           builder: (context, auth, child) {
             return GestureDetector(
