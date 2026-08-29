@@ -244,6 +244,50 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // Serik Logo
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.home_work_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'SERIK',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // Welcome Text

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/pages/admin_map_page.dart';
 import 'package:serik/pages/app_settings_page.dart';
@@ -14,6 +16,7 @@ import 'package:serik/pages/profile_edit_page.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/utils/app_typography.dart';
+import 'package:serik/theme/app_theme.dart';
 import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
 import '../model/tenant_model.dart';
@@ -24,8 +27,6 @@ import 'tenants_page.dart';
 import 'payments_page.dart';
 import 'maintenance_page.dart';
 import 'reports_page.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:serik/theme/app_theme.dart';
 
 class RentalHomePage extends StatefulWidget {
   const RentalHomePage({super.key});
@@ -328,16 +329,45 @@ class _RentalHomePageState extends State<RentalHomePage>
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: Center(
-                  child: Text(
-                    (auth.userName ?? 'L')[0].toUpperCase(),
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                child: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                    ? ClipOval(
+                        child: CachedNetworkImage(
+                          imageUrl: auth.avatarUrl!,
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Center(
+                            child: Text(
+                              (auth.userName ?? 'L')[0].toUpperCase(),
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Center(
+                            child: Text(
+                              (auth.userName ?? 'L')[0].toUpperCase(),
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          (auth.userName ?? 'L')[0].toUpperCase(),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(height: 12),
               Text(
@@ -774,11 +804,30 @@ class _RentalHomePageState extends State<RentalHomePage>
                   : Colors.white.withValues(alpha: 0.22),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.person_outline_rounded,
-              size: 20,
-              color: isDark ? _darkPrimary : Colors.white,
-            ),
+            child: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                ? ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: auth.avatarUrl!,
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Icon(
+                        Icons.person_outline_rounded,
+                        size: 20,
+                        color: isDark ? _darkPrimary : Colors.white,
+                      ),
+                      errorWidget: (context, url, error) => Icon(
+                        Icons.person_outline_rounded,
+                        size: 20,
+                        color: isDark ? _darkPrimary : Colors.white,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    Icons.person_outline_rounded,
+                    size: 20,
+                    color: isDark ? _darkPrimary : Colors.white,
+                  ),
           ),
         ),
       ],
@@ -956,7 +1005,7 @@ class _RentalHomePageState extends State<RentalHomePage>
               context.tr('Nyumba Zangu', en: 'My Properties'),
               primary,
               textCol,
-              center: true,
+              center: false,
             ),
             const SizedBox(height: 12),
             _carousel(isDark, primary),
@@ -965,6 +1014,7 @@ class _RentalHomePageState extends State<RentalHomePage>
               context.tr('Vitendo vya Haraka', en: 'Quick Actions'),
               primary,
               textCol,
+              center: false,
             ),
             const SizedBox(height: 12),
             _quickActions(isDark, primary, surface, shadow),
@@ -1413,54 +1463,57 @@ class _RentalHomePageState extends State<RentalHomePage>
       );
     }
     if (houses.isEmpty) {
-      return GestureDetector(
-        onTap: _showAddHouseForm,
-        child: Container(
-          height: 190,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primary, primary.withValues(alpha: 0.65)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      return Center(
+        child: GestureDetector(
+          onTap: _showAddHouseForm,
+          child: Container(
+            width: double.infinity,
+            height: 190,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [primary, primary.withValues(alpha: 0.65)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
             ),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  shape: BoxShape.circle,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.add_home_rounded,
+                    size: 36,
+                    color: Colors.white,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.add_home_rounded,
-                  size: 36,
-                  color: Colors.white,
+                const SizedBox(height: 10),
+                Text(
+                  context.tr(
+                    'Ongeza nyumba yako ya kwanza',
+                    en: 'Add your first property',
+                  ),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                context.tr(
-                  'Ongeza nyumba yako ya kwanza',
-                  en: 'Add your first property',
+                const SizedBox(height: 4),
+                Text(
+                  context.tr('Gusa kuongeza', en: 'Tap to add'),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                  ),
                 ),
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context.tr('Gusa kuongeza', en: 'Tap to add'),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 12,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
