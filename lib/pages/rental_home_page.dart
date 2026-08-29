@@ -792,43 +792,47 @@ class _RentalHomePageState extends State<RentalHomePage>
           isDark,
           () => tp.toggleTheme(),
         ),
-        GestureDetector(
-          onTap: _showProfileDialog,
-          child: Container(
-            margin: const EdgeInsets.only(right: 12),
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? _darkPrimary.withValues(alpha: 0.15)
-                  : Colors.white.withValues(alpha: 0.22),
-              shape: BoxShape.circle,
-            ),
-            child: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
-                ? ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: auth.avatarUrl!,
-                      width: 36,
-                      height: 36,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Icon(
+        Consumer<AuthProvider>(
+          builder: (context, auth, child) {
+            return GestureDetector(
+              onTap: _showProfileDialog,
+              child: Container(
+                margin: const EdgeInsets.only(right: 12),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? _darkPrimary.withValues(alpha: 0.15)
+                      : Colors.white.withValues(alpha: 0.22),
+                  shape: BoxShape.circle,
+                ),
+                child: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                    ? ClipOval(
+                        child: CachedNetworkImage(
+                          imageUrl: auth.avatarUrl!,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Icon(
+                            Icons.person_outline_rounded,
+                            size: 20,
+                            color: isDark ? _darkPrimary : Colors.white,
+                          ),
+                          errorWidget: (context, url, error) => Icon(
+                            Icons.person_outline_rounded,
+                            size: 20,
+                            color: isDark ? _darkPrimary : Colors.white,
+                          ),
+                        ),
+                      )
+                    : Icon(
                         Icons.person_outline_rounded,
                         size: 20,
                         color: isDark ? _darkPrimary : Colors.white,
                       ),
-                      errorWidget: (context, url, error) => Icon(
-                        Icons.person_outline_rounded,
-                        size: 20,
-                        color: isDark ? _darkPrimary : Colors.white,
-                      ),
-                    ),
-                  )
-                : Icon(
-                    Icons.person_outline_rounded,
-                    size: 20,
-                    color: isDark ? _darkPrimary : Colors.white,
-                  ),
-          ),
+              ),
+            );
+          },
         ),
       ],
       bottom: PreferredSize(

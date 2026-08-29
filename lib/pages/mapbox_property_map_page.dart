@@ -48,7 +48,6 @@ class MapboxPropertyMapPage extends StatefulWidget {
 class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   mapbox.MapboxMap? _mapboxMap;
   mapbox.PointAnnotationManager? _annotationManager;
-  mapbox.PolylineManager? _polylineManager;
   final TextEditingController _searchController = TextEditingController();
   final Map<String, Uint8List> _iconCache = {};
 
@@ -60,14 +59,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   final double _maxPrice = 1000000;
   String _selectedType = 'Zote';
   String _selectedUniversity = 'Zote';
-
-  // Directions related
-  bool _isGettingDirections = false;
-  RentalSpot? _selectedPropertyForDirections;
-  List<mapbox.Position> _currentRoute = [];
-  String _routeDistance = '';
-  String _routeDuration = '';
-  List<String> _turnByTurnInstructions = [];
 
   geo.Position get _defaultPosition => geo.Position(
     latitude: -6.7924,
@@ -189,7 +180,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   Future<void> _onMapCreated(mapbox.MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
     _annotationManager = await mapboxMap.annotations.createPointAnnotationManager();
-    _polylineManager = await mapboxMap.annotations.createPolylineManager();
     await mapboxMap.location.updateSettings(
       mapbox.LocationComponentSettings(enabled: true, pulsingEnabled: true),
     );
@@ -202,127 +192,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     _currentZoom = zoom;
     _clusters = _buildClusters(_filterSpots(_spots), _currentZoom);
     _refreshAnnotations();
-  }
-
-  Future<void> _clearRoute() async {
-    final manager = _polylineManager;
-    if (manager == null) return;
-    await manager.deleteAll();
-    _currentRoute = [];
-    _routeDistance = '';
-    _routeDuration = '';
-    _turnByTurnInstructions = [];
-    _selectedPropertyForDirections = null;
-    setState(() {});
-  }
-
-  Future<void> _getDirections(RentalSpot spot) async {
-    setState(() {
-      _isGettingDirections = true;
-      _selectedPropertyForDirections = spot;
-    });
-
-    try {
-      final currentPosition = await geo.Geolocator.getCurrentPosition(
-        desiredAccuracy: geo.LocationAccuracy.high,
-      );
-
-      final origin = mapbox.Point(
-        coordinates: mapbox.Position(currentPosition.longitude, currentPosition.latitude),
-      );
-      final destination = mapbox.Point(
-        coordinates: mapbox.Position(spot.longitude, spot.latitude),
-      );
-
-      // Mapbox Directions API call
-      final response = await ApiService.getMapboxDirections(
-        origin.longitude,
-        origin.latitude,
-        destination.longitude,
-        destination.latitude,
-      );
-
-      if (response != null && response['routes'] != null && response['routes'].isNotEmpty) {
-        final route = response['routes'][0];
-        final geometry = route['geometry'];
-        final legs = route['legs'];
-
-        // Parse route coordinates
-        final coordinates = <mapbox.Position>[];
-        if (geometry != null && geometry['coordinates'] != null) {
-          for (final coord in geometry['coordinates']) {
-            coordinates.add(mapbox.Position(coord[0], coord[1]));
-          }
-        }
-
-        // Parse distance and duration
-        final distance = route['distance'] as double? ?? 0.0;
-        final duration = route['duration'] as double? ?? 0.0;
-
-        _routeDistance = '${(distance / 1000).toStringAsFixed(1)} km';
-        _routeDuration = '${(duration / 60).toStringAsFixed(0)} min';
-
-        // Parse turn-by-turn instructions
-        _turnByTurnInstructions = [];
-        if (legs != null) {
-          for (final leg in legs) {
-            if (leg['steps'] != null) {
-              for (final step in leg['steps']) {
-                final instruction = step['maneuver']['instruction'] as String?;
-                if (instruction != null && instruction.isNotEmpty) {
-                  _turnByTurnInstructions.add(instruction);
-                }
-              }
-            }
-          }
-        }
-
-        // Draw route on map
-        final manager = _polylineManager;
-        if (manager != null && coordinates.isNotEmpty) {
-          await manager.deleteAll();
-          await manager.create(
-            mapbox.PolylineOptions(
-              geometry: [
-                mapbox.LineString(
-                  coordinates: coordinates,
-                ),
-              ],
-              lineColor: Colors.blue.toARGB32(),
-              lineWidth: 5.0,
-              lineOpacity: 0.8,
-            ),
-          );
-        }
-
-        _currentRoute = coordinates;
-
-        // Move camera to show the route
-        final cameraOptions = mapbox.CameraOptions(
-          center: mapbox.Point(
-            coordinates: mapbox.Position(
-              (currentPosition.longitude + spot.longitude) / 2,
-              (currentPosition.latitude + spot.latitude) / 2,
-            ),
-          ),
-          zoom: 13.0,
-          padding: mapbox.EdgeInsets(
-            left: 50,
-            right: 50,
-            top: 100,
-            bottom: 100,
-          ),
-        );
-
-        _mapboxMap?.camera.flyTo(cameraOptions: cameraOptions, duration: 1000);
-      }
-    } catch (e) {
-      debugPrint('Error getting directions: $e');
-    } finally {
-      setState(() {
-        _isGettingDirections = false;
-      });
-    }
   }
 
   Future<void> _refreshAnnotations() async {
@@ -478,34 +347,23 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     // Draw pin body
     final pinPaint = Paint()..color = fill;
-    canvas.drawPath(
-      Path()
-        ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
-        ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
-        ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
-        ..lineTo(pinX, pinY + pinHeight)
-        ..lineTo(pinX, pinY + pinHeight / 2)
-        ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
-        ..close(),
-      pinPaint,
-    );
+    final pinPath = Path()
+      ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
+      ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
+      ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
+      ..lineTo(pinX, pinY + pinHeight)
+      ..lineTo(pinX, pinY + pinHeight / 2)
+      ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
+      ..close();
+    
+    canvas.drawPath(pinPath, pinPaint);
 
     // Draw white border
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..color = Colors.white;
-    canvas.drawPath(
-      Path()
-        ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
-        ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
-        ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
-        ..lineTo(pinX, pinY + pinHeight)
-        ..lineTo(pinX, pinY + pinHeight / 2)
-        ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
-        ..close(),
-      borderPaint,
-    );
+    canvas.drawPath(pinPath, borderPaint);
 
     // Draw price/count text
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
@@ -671,19 +529,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        _getDirections(spot);
+                        // For now, just navigate to house details
+                        // TODO: Implement Mapbox directions in future
                       },
-                      icon: _isGettingDirections
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.directions_rounded, size: 18),
+                      icon: const Icon(Icons.directions_rounded, size: 18),
                       label: Text(
-                        _isGettingDirections
-                            ? context.tr('Inapata...', en: 'Loading...')
-                            : context.tr('Njia', en: 'Directions'),
+                        context.tr('Njia', en: 'Directions'),
                       ),
                     ),
                   ),
@@ -719,16 +570,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     _refreshAnnotations();
   }
 
-  // Tanzania bounds for camera restriction
-  static const _tanzaniaBounds = mapbox.CameraBoundsOptions(
-    bounds: mapbox.CoordinateBounds(
-      southwest: mapbox.Point(coordinates: [29.0, -12.0]), // Southwest Tanzania
-      northeast: mapbox.Point(coordinates: [41.0, -1.0]),  // Northeast Tanzania
-    ),
-    maxZoom: 18.0,
-    minZoom: 5.0,
-  );
-
   List<RentalSpot> _visibleSpots() => _filterSpots(_spots);
 
   @override
@@ -750,7 +591,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                 center: mapbox.Point(coordinates: initialCenter),
                 zoom: 12,
               ),
-              cameraBounds: _tanzaniaBounds,
               styleUri: mapbox.MapboxStyles.MAPBOX_STREETS,
               textureView: true,
               onMapCreated: _onMapCreated,
@@ -979,120 +819,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
               ),
             ),
           ),
-          // Directions info panel (when route is active)
-          if (_currentRoute.isNotEmpty)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 140,
-              left: 12,
-              right: 12,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: surfaceColor.withValues(alpha: 0.95),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.directions_rounded, color: primaryColor, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            context.tr('Njia ya Kuenda', en: 'Directions'),
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close, color: subtextColor, size: 18),
-                          onPressed: _clearRoute,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.straighten, color: primaryColor, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          _routeDistance,
-                          style: TextStyle(color: textColor, fontSize: 12),
-                        ),
-                        const SizedBox(width: 12),
-                        Icon(Icons.access_time, color: primaryColor, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          _routeDuration,
-                          style: TextStyle(color: textColor, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                    if (_turnByTurnInstructions.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      const Divider(height: 1),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 80,
-                        child: ListView.builder(
-                          itemCount: _turnByTurnInstructions.length > 3 ? 3 : _turnByTurnInstructions.length,
-                          itemBuilder: (context, index) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    decoration: BoxDecoration(
-                                      color: primaryColor.withValues(alpha: 0.2),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: TextStyle(
-                                          color: primaryColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _turnByTurnInstructions[index],
-                                      style: TextStyle(color: textColor, fontSize: 11),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
           // Floating compact bottom summary
           Positioned(
             bottom: 16,
@@ -1194,15 +920,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         ),
       ),
     );
-  }
-
-  String _formatPrice(double price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(1)}M';
-    } else if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(0)}K';
-    }
-    return price.toStringAsFixed(0);
   }
 
   void _showPropertyListBottomSheet() {
