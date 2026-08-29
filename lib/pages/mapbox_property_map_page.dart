@@ -318,50 +318,97 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   Future<Uint8List> _buildClusterBitmap(int count, double price) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    const size = 160.0;
+    const size = 120.0;
     final isCluster = count > 1;
     final fill = isCluster ? const Color(0xFF0F8B61) : primaryColor;
 
+    // Google Maps-style pin body (rounded at top, pointed at bottom)
+    final pinPath = Path();
+    final pinWidth = isCluster ? 50.0 : 44.0;
+    final pinHeight = isCluster ? 70.0 : 64.0;
+    final pinX = size / 2;
+    final pinY = size / 2 - 10;
+
+    // Draw shadow
     final shadow = Paint()
-      ..color = Colors.black.withValues(alpha: 0.22)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawCircle(const Offset(size / 2, size / 2 + 10), 30, shadow);
-
-    final circlePaint = Paint()..color = fill;
-    canvas.drawCircle(const Offset(size / 2, size / 2), isCluster ? 34 : 30, circlePaint);
-
-    canvas.drawCircle(
-      const Offset(size / 2, size / 2),
-      isCluster ? 34 : 30,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..color = Colors.white,
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawPath(
+      Path()
+        ..moveTo(pinX - pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
+        ..lineTo(pinX + pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
+        ..quadraticBezierTo(pinX + pinWidth / 2 + 2, pinY + pinHeight / 2 + 2, pinX + 2, pinY + pinHeight / 2 + 2)
+        ..lineTo(pinX + 2, pinY + pinHeight + 2)
+        ..lineTo(pinX - 2, pinY + pinHeight + 2)
+        ..lineTo(pinX - 2, pinY + pinHeight / 2 + 2)
+        ..quadraticBezierTo(pinX - pinWidth / 2 + 2, pinY + pinHeight / 2 + 2, pinX - pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
+        ..close(),
+      shadow,
     );
 
+    // Draw pin body
+    final pinPaint = Paint()..color = fill;
+    canvas.drawPath(
+      Path()
+        ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
+        ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
+        ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
+        ..lineTo(pinX, pinY + pinHeight)
+        ..lineTo(pinX, pinY + pinHeight / 2)
+        ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
+        ..close(),
+      pinPaint,
+    );
+
+    // Draw white border
+    final borderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = Colors.white;
+    canvas.drawPath(
+      Path()
+        ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
+        ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
+        ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
+        ..lineTo(pinX, pinY + pinHeight)
+        ..lineTo(pinX, pinY + pinHeight / 2)
+        ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
+        ..close(),
+      borderPaint,
+    );
+
+    // Draw price/count text
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    final label = isCluster
-        ? '$count'
-        : _formatPrice(price);
+    final label = isCluster ? '$count' : _formatPrice(price);
 
     textPainter.text = TextSpan(
       text: label,
       style: TextStyle(
         color: Colors.white,
-        fontSize: isCluster ? 26 : 18,
-        fontWeight: FontWeight.w800,
+        fontSize: isCluster ? 16 : 14,
+        fontWeight: FontWeight.w700,
       ),
     );
     textPainter.layout();
     textPainter.paint(
       canvas,
-      Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2 - 2),
+      Offset((size - textPainter.width) / 2, pinY - 8),
     );
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.toInt(), size.toInt());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     return bytes!.buffer.asUint8List();
+  }
+
+  String _formatPrice(double price) {
+    if (price >= 1000000) {
+      return '${(price / 1000000).toStringAsFixed(price % 1000000 == 0 ? 0 : 1)}M';
+    }
+    if (price >= 1000) {
+      return '${(price / 1000).toStringAsFixed(price % 1000 == 0 ? 0 : 1)}K';
+    }
+    return price.toStringAsFixed(0);
   }
 
   Future<void> _openDirections(RentalSpot spot) async {
@@ -538,6 +585,16 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     _refreshAnnotations();
   }
 
+  // Tanzania bounds for camera restriction
+  static const _tanzaniaBounds = mapbox.CameraBoundsOptions(
+    bounds: mapbox.CoordinateBounds(
+      southwest: mapbox.Point(coordinates: [29.0, -12.0]), // Southwest Tanzania
+      northeast: mapbox.Point(coordinates: [41.0, -1.0]),  // Northeast Tanzania
+    ),
+    maxZoom: 18.0,
+    minZoom: 5.0,
+  );
+
   List<RentalSpot> _visibleSpots() => _filterSpots(_spots);
 
   @override
@@ -549,255 +606,259 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: Column(
+      body: Stack(
         children: [
-          // Compact header
-          Container(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 8,
-              left: 12,
-              right: 12,
-              bottom: 8,
+          // Map fills entire available space
+          Positioned.fill(
+            child: mapbox.MapWidget(
+              key: const ValueKey('mapbox-property-map'),
+              cameraOptions: mapbox.CameraOptions(
+                center: mapbox.Point(coordinates: initialCenter),
+                zoom: 12,
+              ),
+              cameraBounds: _tanzaniaBounds,
+              styleUri: mapbox.MapboxStyles.MAPBOX_STREETS,
+              textureView: true,
+              onMapCreated: _onMapCreated,
+              onCameraChangeListener: _onCameraChangeListener,
+              onTapListener: _handleTap,
             ),
-            color: backgroundColor,
-            child: Row(
+          ),
+          // Floating compact header area
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 12,
+            right: 12,
+            child: Column(
               children: [
-                // Compact title
-                Expanded(
-                  child: Text(
-                    widget.mode == PropertyMapMode.landlord
-                        ? context.tr('Ramani ya Nyumba Zangu', en: 'My Houses Map')
-                        : context.tr('Ramani ya Nyumba', en: 'Property Map'),
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                // Compact action buttons
-                IconButton(
-                  onPressed: _determinePosition,
-                  icon: const Icon(Icons.my_location_rounded, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
-                IconButton(
-                  onPressed: _loadData,
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
-              ],
-            ),
-          ),
-          // Compact search bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: searchBarBg,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.search_rounded, color: subtextColor, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setState(() => _searchQuery = value);
-                        _refreshAnnotations();
-                      },
-                      style: TextStyle(color: textColor, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: context.tr(
-                          'Tafuta nyumba...',
-                          en: 'Search houses...',
-                        ),
-                        hintStyle: TextStyle(color: subtextColor, fontSize: 14),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  if (_searchQuery.isNotEmpty)
-                    IconButton(
-                      icon: Icon(Icons.close_rounded, color: primaryColor, size: 16),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                        _refreshAnnotations();
-                      },
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          // Compact horizontal filter row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: SizedBox(
-              height: 32,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _buildCompactFilterChip('Zote'),
-                  const SizedBox(width: 6),
-                  _buildCompactFilterChip('self_container'),
-                  const SizedBox(width: 6),
-                  _buildCompactFilterChip('shared'),
-                  const SizedBox(width: 6),
-                  _buildCompactFilterChip('bedsitter'),
-                  const SizedBox(width: 6),
-                  _buildCompactFilterChip('studio'),
-                  const SizedBox(width: 6),
-                  _buildCompactFilterChip('flat'),
-                ],
-              ),
-            ),
-          ),
-          // Compact stats row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              children: [
-                // Properties count
+                // Compact title row
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(6),
+                    color: backgroundColor.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.home_rounded, color: Colors.white, size: 12),
-                      const SizedBox(width: 4),
-                      Text(
-                        visibleCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Text(
+                          widget.mode == PropertyMapMode.landlord
+                              ? context.tr('Ramani ya Nyumba Zangu', en: 'My Houses Map')
+                              : context.tr('Ramani ya Nyumba', en: 'Property Map'),
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
+                      ),
+                      IconButton(
+                        onPressed: _determinePosition,
+                        icon: const Icon(Icons.my_location_rounded, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      ),
+                      IconButton(
+                        onPressed: _loadData,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                // University selector (browse mode only)
-                if (widget.mode == PropertyMapMode.browse)
-                  GestureDetector(
-                    onTap: _universityMenu,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                const SizedBox(height: 8),
+                // Floating compact search bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: searchBarBg.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.search_rounded, color: subtextColor, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            setState(() => _searchQuery = value);
+                            _refreshAnnotations();
+                          },
+                          style: TextStyle(color: textColor, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: context.tr(
+                              'Tafuta nyumba...',
+                              en: 'Search houses...',
+                            ),
+                            hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      if (_searchQuery.isNotEmpty)
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: primaryColor, size: 14),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                            _refreshAnnotations();
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Compact horizontal filter row
+                SizedBox(
+                  height: 28,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _buildCompactFilterChip('Zote'),
+                      const SizedBox(width: 4),
+                      _buildCompactFilterChip('self_container'),
+                      const SizedBox(width: 4),
+                      _buildCompactFilterChip('shared'),
+                      const SizedBox(width: 4),
+                      _buildCompactFilterChip('bedsitter'),
+                      const SizedBox(width: 4),
+                      _buildCompactFilterChip('studio'),
+                      const SizedBox(width: 4),
+                      _buildCompactFilterChip('flat'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Compact stats row
+                Row(
+                  children: [
+                    // Properties count
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: surfaceColor.withValues(alpha: 0.8),
+                        color: primaryColor,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.school_rounded, color: primaryColor, size: 12),
-                          const SizedBox(width: 4),
+                          const Icon(Icons.home_rounded, color: Colors.white, size: 10),
+                          const SizedBox(width: 3),
                           Text(
-                            _selectedUniversity == 'Zote' 
-                                ? context.tr('Vyote', en: 'All') 
-                                : _selectedUniversity,
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                            visibleCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(width: 2),
-                          Icon(Icons.expand_more, color: primaryColor, size: 14),
                         ],
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          // Map area
-          Expanded(
-            child: Stack(
-              children: [
-                mapbox.MapWidget(
-                  key: const ValueKey('mapbox-property-map'),
-                  cameraOptions: mapbox.CameraOptions(
-                    center: mapbox.Point(coordinates: initialCenter),
-                    zoom: 12,
-                  ),
-                  styleUri: mapbox.MapboxStyles.MAPBOX_STREETS,
-                  textureView: true,
-                  onMapCreated: _onMapCreated,
-                  onCameraChangeListener: _onCameraChangeListener,
-                  onTapListener: _handleTap,
-                ),
-                // Current location button (bottom right)
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                    const SizedBox(width: 6),
+                    // University selector (browse mode only)
+                    if (widget.mode == PropertyMapMode.browse)
+                      GestureDetector(
+                        onTap: _universityMenu,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: surfaceColor.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.school_rounded, color: primaryColor, size: 10),
+                              const SizedBox(width: 3),
+                              Text(
+                                _selectedUniversity == 'Zote' 
+                                    ? context.tr('Vyote', en: 'All') 
+                                    : _selectedUniversity,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(Icons.expand_more, color: primaryColor, size: 12),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                    child: FloatingActionButton(
-                      heroTag: 'location',
-                      mini: true,
-                      onPressed: _isGettingLocation ? null : _determinePosition,
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                      child: _isGettingLocation
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(Icons.my_location_rounded, color: primaryColor, size: 20),
-                    ),
-                  ),
+                      ),
+                  ],
                 ),
-                // Compact bottom summary
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  right: 72,
-                  child: _buildCompactBottomSummary(context, visibleCount),
-                ),
-                if (_isLoading)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                  ),
               ],
             ),
           ),
+          // Floating current location button (bottom right)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                heroTag: 'location',
+                mini: true,
+                onPressed: _isGettingLocation ? null : _determinePosition,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: _isGettingLocation
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.my_location_rounded, color: primaryColor, size: 20),
+              ),
+            ),
+          ),
+          // Floating compact bottom summary
+          Positioned(
+            bottom: 16,
+            left: 16,
+            right: 72,
+            child: _buildCompactBottomSummary(context, visibleCount),
+          ),
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.3),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
         ],
       ),
     );
