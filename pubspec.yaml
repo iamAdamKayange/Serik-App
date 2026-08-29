@@ -76,6 +76,8 @@ dependencies:
   firebase_messaging: ^16.4.1
   flutter_local_notifications: ^22.0.1
   mapbox_maps_flutter: ^2.27.0
+  mapbox_api: ^1.0.0
+  polyline_tools: ^0.0.2
 
 
 dev_dependencies:

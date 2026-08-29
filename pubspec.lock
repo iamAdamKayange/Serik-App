@@ -1005,6 +1005,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.3.2"
+  mapbox_api:
+    dependency: "direct main"
+    description:
+      name: mapbox_api
+      sha256: eced5b43a02f420bd6c42b7a543494625bc27e5ef6dab9a0387694eeea489e69
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   mapbox_maps_flutter:
     dependency: "direct main"
     description:
@@ -1213,6 +1221,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  polyline_tools:
+    dependency: "direct main"
+    description:
+      name: polyline_tools
+      sha256: "8c523335bb8d16fb0c7835916ed94d97d9a063a4386e9193bd6e8fe233591df9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.2"
   pool:
     dependency: transitive
     description:

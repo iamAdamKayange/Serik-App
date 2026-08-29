@@ -4,8 +4,11 @@ import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart' as geo;
+import 'package:mapbox_api/mapbox_api.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
+import 'package:polyline_tools/polyline_tools.dart';
 import 'package:provider/provider.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/model/house_data.dart';
@@ -48,6 +51,7 @@ class MapboxPropertyMapPage extends StatefulWidget {
 class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   mapbox.MapboxMap? _mapboxMap;
   mapbox.PointAnnotationManager? _annotationManager;
+  mapbox.PolylineAnnotationManager? _polylineManager;
   final TextEditingController _searchController = TextEditingController();
   final Map<String, Uint8List> _iconCache = {};
 
@@ -59,6 +63,15 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   final double _maxPrice = 1000000;
   String _selectedType = 'Zote';
   String _selectedUniversity = 'Zote';
+
+  // Directions state
+  bool _isGettingDirections = false;
+  RentalSpot? _selectedPropertyForDirections;
+  mapbox.PolylineAnnotation? _routePolyline;
+  String _routeDistance = '';
+  String _routeDuration = '';
+  List<String> _turnByTurnInstructions = [];
+  geo.Position? _currentPosition;
 
   geo.Position get _defaultPosition => geo.Position(
     latitude: -6.7924,
@@ -100,6 +113,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _clearRoute();
     super.dispose();
   }
 
@@ -155,6 +169,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
             distanceFilter: 10,
           ),
         );
+        _currentPosition = position;
         final map = _mapboxMap;
         if (mounted) {
           await map?.setCamera(
@@ -180,6 +195,20 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   Future<void> _onMapCreated(mapbox.MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
     _annotationManager = await mapboxMap.annotations.createPointAnnotationManager();
+    _polylineManager = await mapboxMap.annotations.createPolylineAnnotationManager();
+    
+    // Set camera bounds for Tanzania/East Africa
+    await mapboxMap.setBounds(
+      mapbox.CameraBoundsOptions(
+        bounds: mapbox.Bounds(
+          northeast: mapbox.Position(41.0, -1.0),
+          southwest: mapbox.Position(29.0, -12.0),
+        ),
+        minZoom: 5.0,
+        maxZoom: 18.0,
+      ),
+    );
+    
     await mapboxMap.location.updateSettings(
       mapbox.LocationComponentSettings(enabled: true, pulsingEnabled: true),
     );
@@ -529,12 +558,22 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        // For now, just navigate to house details
-                        // TODO: Implement Mapbox directions in future
+                        _getDirections(spot);
                       },
-                      icon: const Icon(Icons.directions_rounded, size: 18),
+                      icon: _isGettingDirections
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.directions_rounded, size: 18),
                       label: Text(
-                        context.tr('Njia', en: 'Directions'),
+                        _isGettingDirections
+                            ? context.tr('Inapata...', en: 'Getting route...')
+                            : context.tr('Njia', en: 'Directions'),
                       ),
                     ),
                   ),
@@ -787,6 +826,140 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
               ],
             ),
           ),
+          // Directions overlay (shown when route is active)
+          if (_selectedPropertyForDirections != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 200,
+              left: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: surfaceColor.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with close button
+                    Row(
+                      children: [
+                        Icon(Icons.directions_rounded, color: primaryColor, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            context.tr('Njia ya kwenda', en: 'Route to'),
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _clearRoute,
+                          icon: const Icon(Icons.close, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Distance and duration
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildRouteInfoCard(
+                            icon: Icons.straighten_rounded,
+                            label: context.tr('Umbali', en: 'Distance'),
+                            value: _routeDistance.isNotEmpty
+                                ? _routeDistance
+                                : context.tr('Inahesabu...', en: 'Calculating...'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildRouteInfoCard(
+                            icon: Icons.access_time_rounded,
+                            label: context.tr('Muda', en: 'Duration'),
+                            value: _routeDuration.isNotEmpty
+                                ? _routeDuration
+                                : context.tr('Inahesabu...', en: 'Calculating...'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Turn-by-turn instructions
+                    if (_turnByTurnInstructions.isNotEmpty) ...[
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr('Maelekezo:', en: 'Instructions:'),
+                        style: TextStyle(
+                          color: subtextColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 150),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _turnByTurnInstructions.length,
+                          itemBuilder: (context, index) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: TextStyle(
+                                          color: primaryColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _turnByTurnInstructions[index],
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           // Floating current location button (bottom right)
           Positioned(
             bottom: 16,
@@ -875,6 +1048,47 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       checkmarkColor: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _buildRouteInfoCard({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: primaryColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: primaryColor, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: subtextColor,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1095,6 +1309,247 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   void _navigateToPropertyDetail(RentalSpot spot) {
     // Navigate to property detail - placeholder for navigation logic
     // This would typically navigate to RentalDetailScreen or similar
+  }
+
+  Future<void> _getDirections(RentalSpot spot) async {
+    if (_currentPosition == null) {
+      await _determinePosition();
+      if (_currentPosition == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr(
+                'Tafadhali wezesha GPS',
+                en: 'Please enable GPS',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() {
+      _isGettingDirections = true;
+      _selectedPropertyForDirections = spot;
+      _routeDistance = '';
+      _routeDuration = '';
+      _turnByTurnInstructions = [];
+    });
+
+    try {
+      final mapboxToken = dotenv.env['MAPBOX_PUBLIC_TOKEN'];
+      if (mapboxToken == null || mapboxToken.isEmpty) {
+        throw Exception('Mapbox token not found');
+      }
+
+      final mapbox = MapboxApi(accessToken: mapboxToken);
+
+      final response = await mapbox.directions.request(
+        profile: NavigationProfile.DRIVING,
+        overview: NavigationOverview.FULL,
+        geometries: NavigationGeometries.POLYLINE6,
+        steps: true,
+        coordinates: [
+          [_currentPosition!.latitude, _currentPosition!.longitude],
+          [spot.latitude, spot.longitude],
+        ],
+      );
+
+      if (response.error != null) {
+        throw Exception('Directions error: ${response.error}');
+      }
+
+      if (response.routes.isEmpty) {
+        throw Exception('No route found');
+      }
+
+      final route = response.routes.first;
+
+      // Parse distance and duration
+      final distance = route.distance ?? 0;
+      final duration = route.duration ?? 0;
+
+      setState(() {
+        _routeDistance = _formatDistance(distance);
+        _routeDuration = _formatDuration(duration);
+      });
+
+      // Parse turn-by-turn instructions
+      final instructions = <String>[];
+      if (route.legs != null) {
+        for (final leg in route.legs!) {
+          if (leg.steps != null) {
+            for (final step in leg.steps!) {
+              if (step.maneuver != null && step.maneuver!.modifier != null) {
+                final instruction = _parseManeuver(step.maneuver!.modifier!);
+                instructions.add(instruction);
+              }
+            }
+          }
+        }
+      }
+
+      setState(() {
+        _turnByTurnInstructions = instructions;
+      });
+
+      // Draw the route on the map
+      if (route.geometry != null) {
+        await _drawRoute(route.geometry!);
+      }
+
+      // Zoom to fit the route
+      await _fitRouteToCamera([
+        mapbox.Position(_currentPosition!.longitude, _currentPosition!.latitude),
+        mapbox.Position(spot.longitude, spot.latitude),
+      ]);
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'Imeshindika kupata njia: $e',
+              en: 'Failed to get directions: $e',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGettingDirections = false);
+      }
+    }
+  }
+
+  String _formatDistance(double meters) {
+    if (meters >= 1000) {
+      final km = meters / 1000;
+      return '${km.toStringAsFixed(1)} km';
+    }
+    return '${meters.toStringAsFixed(0)} m';
+  }
+
+  String _formatDuration(double seconds) {
+    final minutes = (seconds / 60).round();
+    if (minutes >= 60) {
+      final hours = minutes ~/ 60;
+      final remainingMinutes = minutes % 60;
+      return '$hours h $remainingMinutes min';
+    }
+    return '$minutes min';
+  }
+
+  String _parseManeuver(String modifier) {
+    switch (modifier.toLowerCase()) {
+      case 'left':
+        return context.tr('Geuka kushoto', en: 'Turn left');
+      case 'right':
+        return context.tr('Geuka kulia', en: 'Turn right');
+      case 'slight left':
+        return context.tr('Geuka kushoto kidogo', en: 'Turn slight left');
+      case 'slight right':
+        return context.tr('Geuka kulia kidogo', en: 'Turn slight right');
+      case 'sharp left':
+        return context.tr('Geuka kushoto vibaya', en: 'Turn sharp left');
+      case 'sharp right':
+        return context.tr('Geuka kulia vibaya', en: 'Turn sharp right');
+      case 'uturn':
+        return context.tr('Rudi nyuma', en: 'U-turn');
+      case 'straight':
+        return context.tr('Endelea moja kwa moja', en: 'Continue straight');
+      default:
+        return modifier;
+    }
+  }
+
+  Future<void> _drawRoute(String encodedPolyline) async {
+    final manager = _polylineManager;
+    if (manager == null) return;
+
+    // Clear existing route
+    if (_routePolyline != null) {
+      await manager.delete(_routePolyline!);
+      _routePolyline = null;
+    }
+
+    // Decode polyline
+    final decoded = PolylineTools().decodePolyline(encodedPolyline);
+    final positions = decoded.map((coord) {
+      return mapbox.Position(coord[1], coord[0]); // Note: Mapbox uses [lng, lat]
+    }).toList();
+
+    if (positions.isEmpty) return;
+
+    // Create LineString
+    final lineString = mapbox.LineString.fromPositions(positions);
+
+    // Create polyline annotation
+    final annotation = await manager.create(
+      mapbox.PolylineAnnotationOptions(
+        geometry: lineString,
+        lineColor: const Color(0xFF4CAF50).value,
+        lineWidth: 5.0,
+        lineOpacity: 0.8,
+      ),
+    );
+
+    setState(() {
+      _routePolyline = annotation;
+    });
+  }
+
+  Future<void> _fitRouteToCamera(List<mapbox.Position> positions) async {
+    if (positions.isEmpty || _mapboxMap == null) return;
+
+    // Calculate bounds
+    final lngs = positions.map((p) => p.lng).toList();
+    final lats = positions.map((p) => p.lat).toList();
+
+    final minLng = lngs.reduce((a, b) => a < b ? a : b);
+    final maxLng = lngs.reduce((a, b) => a > b ? a : b);
+    final minLat = lats.reduce((a, b) => a < b ? a : b);
+    final maxLat = lats.reduce((a, b) => a > b ? a : b);
+
+    // Add padding
+    final padding = 0.1;
+    final bounds = mapbox.CameraBoundsOptions(
+      bounds: mapbox.Bounds(
+        northeast: mapbox.Position(maxLng + padding, maxLat + padding),
+        southwest: mapbox.Position(minLng - padding, minLat - padding),
+      ),
+    );
+
+    // Calculate center
+    final centerLng = (minLng + maxLng) / 2;
+    final centerLat = (minLat + maxLat) / 2;
+
+    await _mapboxMap?.setCamera(
+      mapbox.CameraOptions(
+        center: mapbox.Point(coordinates: mapbox.Position(centerLng, centerLat)),
+        zoom: 14,
+      ),
+    );
+  }
+
+  Future<void> _clearRoute() async {
+    final manager = _polylineManager;
+    if (manager == null) return;
+
+    if (_routePolyline != null) {
+      await manager.delete(_routePolyline!);
+      _routePolyline = null;
+    }
+
+    setState(() {
+      _selectedPropertyForDirections = null;
+      _routeDistance = '';
+      _routeDuration = '';
+      _turnByTurnInstructions = [];
+    });
   }
 }
 
