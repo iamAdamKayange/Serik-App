@@ -35,15 +35,12 @@ class MapboxPropertyMapPage extends StatefulWidget {
   final PropertyMapMode mode;
   final String? selectedUniversity;
 
-  const MapboxPropertyMapPage.browse({
-    super.key,
-    this.selectedUniversity,
-  }) : mode = PropertyMapMode.browse;
+  const MapboxPropertyMapPage.browse({super.key, this.selectedUniversity})
+    : mode = PropertyMapMode.browse;
 
-  const MapboxPropertyMapPage.landlord({
-    super.key,
-  }) : mode = PropertyMapMode.landlord,
-       selectedUniversity = null;
+  const MapboxPropertyMapPage.landlord({super.key})
+    : mode = PropertyMapMode.landlord,
+      selectedUniversity = null;
 
   @override
   State<MapboxPropertyMapPage> createState() => _MapboxPropertyMapPageState();
@@ -73,12 +70,15 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   String _routeDuration = '';
   List<String> _turnByTurnInstructions = [];
   geo.Position? _currentPosition;
-  
+
   // Real-time navigation state
   List<_RouteStep> _routeSteps = [];
   int _currentStepIndex = 0;
   String _nextTurnInstruction = '';
   StreamSubscription<geo.Position>? _positionStreamSubscription;
+
+  // Current location marker
+  mapbox.PointAnnotation? _currentLocationMarker;
 
   geo.Position get _defaultPosition => geo.Position(
     latitude: -6.7924,
@@ -120,7 +120,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   @override
   void dispose() {
     _searchController.dispose();
-    _clearRoute();
     _positionStreamSubscription?.cancel();
     super.dispose();
   }
@@ -133,10 +132,13 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           ? await ApiService.getMyHouses()
           : await ApiService.getAllHouses();
 
-      final loaded = housesJson.map((json) {
-        final house = HouseData.fromJson(json as Map<String, dynamic>);
-        return RentalSpot.fromHouseData(house);
-      }).where((spot) => spot.hasValidLocation()).toList();
+      final loaded = housesJson
+          .map((json) {
+            final house = HouseData.fromJson(json as Map<String, dynamic>);
+            return RentalSpot.fromHouseData(house);
+          })
+          .where((spot) => spot.hasValidLocation())
+          .toList();
 
       if (!mounted) return;
       setState(() {
@@ -183,7 +185,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           await map?.setCamera(
             mapbox.CameraOptions(
               center: mapbox.Point(
-                coordinates: mapbox.Position(position.longitude, position.latitude),
+                coordinates: mapbox.Position(
+                  position.longitude,
+                  position.latitude,
+                ),
               ),
               zoom: 13,
             ),
@@ -195,26 +200,106 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
               puckBearingEnabled: true,
             ),
           );
+          // Add custom location marker
+          await _addCurrentLocationMarker(position);
         }
       }
     } catch (_) {}
   }
 
+  Future<void> _addCurrentLocationMarker(geo.Position position) async {
+    final manager = _annotationManager;
+    if (manager == null) return;
+
+    // Remove existing marker
+    if (_currentLocationMarker != null) {
+      await manager.delete(_currentLocationMarker!);
+    }
+
+    // Create custom location marker bitmap
+    final image = await _buildLocationMarkerBitmap();
+
+    // Create annotation
+    final annotation = await manager.create(
+      mapbox.PointAnnotationOptions(
+        geometry: mapbox.Point(
+          coordinates: mapbox.Position(position.longitude, position.latitude),
+        ),
+        image: image,
+        iconSize: 1.0,
+      ),
+    );
+
+    setState(() {
+      _currentLocationMarker = annotation;
+    });
+  }
+
+  Future<Uint8List> _buildLocationMarkerBitmap() async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    const size = 120.0;
+
+    // Draw outer ring (blue)
+    final outerRingPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8;
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      24,
+      outerRingPaint,
+    );
+
+    // Draw inner circle (white)
+    final innerCirclePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      18,
+      innerCirclePaint,
+    );
+
+    // Draw center dot (blue)
+    final centerDotPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      10,
+      centerDotPaint,
+    );
+
+    // Draw pointer/shadow below
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.2)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.drawCircle(
+      Offset(size / 2, size / 2 + 28),
+      8,
+      shadowPaint,
+    );
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return bytes!.buffer.asUint8List();
+  }
+
   Future<void> _onMapCreated(mapbox.MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
-    _annotationManager = await mapboxMap.annotations.createPointAnnotationManager();
-    _polylineManager = await mapboxMap.annotations.createPolylineAnnotationManager();
+    _annotationManager = await mapboxMap.annotations
+        .createPointAnnotationManager();
+    _polylineManager = await mapboxMap.annotations
+        .createPolylineAnnotationManager();
 
     // Set camera bounds for Tanzania/East Africa
     await mapboxMap.setBounds(
       mapbox.CameraBoundsOptions(
         bounds: mapbox.CoordinateBounds(
-          southwest: mapbox.Point(
-            coordinates: mapbox.Position(29.0, -12.0),
-          ),
-          northeast: mapbox.Point(
-            coordinates: mapbox.Position(41.0, -1.0),
-          ),
+          southwest: mapbox.Point(coordinates: mapbox.Position(29.0, -12.0)),
+          northeast: mapbox.Point(coordinates: mapbox.Position(41.0, -1.0)),
           infiniteBounds: false,
         ),
         minZoom: 5.0,
@@ -260,7 +345,8 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   List<RentalSpot> _filterSpots(List<RentalSpot> spots) {
     final query = _searchQuery.trim().toLowerCase();
     return spots.where((spot) {
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           [
             spot.brandName,
             spot.ownerName,
@@ -276,8 +362,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           ].join(' ').toLowerCase().contains(query);
 
       final matchesType = _selectedType == 'Zote' || spot.type == _selectedType;
-      final matchesPrice = spot.rentPrice >= _minPrice && spot.rentPrice <= _maxPrice;
-      final matchesUniversity = _selectedUniversity == 'Zote' ||
+      final matchesPrice =
+          spot.rentPrice >= _minPrice && spot.rentPrice <= _maxPrice;
+      final matchesUniversity =
+          _selectedUniversity == 'Zote' ||
           _isNearUniversity(spot, _selectedUniversity);
       return matchesSearch && matchesType && matchesPrice && matchesUniversity;
     }).toList();
@@ -304,7 +392,8 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     const earthRadius = 6371.0;
     final dLat = _degToRad(lat2 - lat1);
     final dLng = _degToRad(lng2 - lng1);
-    final a = sin(dLat / 2) * sin(dLat / 2) +
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
         cos(_degToRad(lat1)) *
             cos(_degToRad(lat2)) *
             sin(dLng / 2) *
@@ -327,8 +416,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     }
 
     return buckets.values.map((items) {
-      final lat = items.fold<double>(0, (sum, spot) => sum + spot.latitude) / items.length;
-      final lng = items.fold<double>(0, (sum, spot) => sum + spot.longitude) / items.length;
+      final lat =
+          items.fold<double>(0, (sum, spot) => sum + spot.latitude) /
+          items.length;
+      final lng =
+          items.fold<double>(0, (sum, spot) => sum + spot.longitude) /
+          items.length;
       return _ClusterBucket(lat: lat, lng: lng, spots: items);
     }).toList();
   }
@@ -378,11 +471,21 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       Path()
         ..moveTo(pinX - pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
         ..lineTo(pinX + pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
-        ..quadraticBezierTo(pinX + pinWidth / 2 + 2, pinY + pinHeight / 2 + 2, pinX + 2, pinY + pinHeight / 2 + 2)
+        ..quadraticBezierTo(
+          pinX + pinWidth / 2 + 2,
+          pinY + pinHeight / 2 + 2,
+          pinX + 2,
+          pinY + pinHeight / 2 + 2,
+        )
         ..lineTo(pinX + 2, pinY + pinHeight + 2)
         ..lineTo(pinX - 2, pinY + pinHeight + 2)
         ..lineTo(pinX - 2, pinY + pinHeight / 2 + 2)
-        ..quadraticBezierTo(pinX - pinWidth / 2 + 2, pinY + pinHeight / 2 + 2, pinX - pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
+        ..quadraticBezierTo(
+          pinX - pinWidth / 2 + 2,
+          pinY + pinHeight / 2 + 2,
+          pinX - pinWidth / 2 + 2,
+          pinY - pinHeight / 2 + 2,
+        )
         ..close(),
       shadow,
     );
@@ -392,10 +495,20 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     pinPath = Path()
       ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
       ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
-      ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
+      ..quadraticBezierTo(
+        pinX + pinWidth / 2,
+        pinY + pinHeight / 2,
+        pinX,
+        pinY + pinHeight / 2,
+      )
       ..lineTo(pinX, pinY + pinHeight)
       ..lineTo(pinX, pinY + pinHeight / 2)
-      ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
+      ..quadraticBezierTo(
+        pinX - pinWidth / 2,
+        pinY + pinHeight / 2,
+        pinX - pinWidth / 2,
+        pinY - pinHeight / 2,
+      )
       ..close();
 
     canvas.drawPath(pinPath, pinPaint);
@@ -420,10 +533,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       ),
     );
     textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset((size - textPainter.width) / 2, pinY - 8),
-    );
+    textPainter.paint(canvas, Offset((size - textPainter.width) / 2, pinY - 8));
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.toInt(), size.toInt());
@@ -447,15 +557,21 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     final clusters = _buildClusters(_filterSpots(_spots), _currentZoom);
     if (clusters.isEmpty) return;
 
-    final nearest = clusters
-        .map((cluster) => (cluster: cluster, distance: _distanceKm(
-              tappedLat.toDouble(),
-              tappedLng.toDouble(),
-              cluster.lat,
-              cluster.lng,
-            )))
-        .toList()
-      ..sort((a, b) => a.distance.compareTo(b.distance));
+    final nearest =
+        clusters
+            .map(
+              (cluster) => (
+                cluster: cluster,
+                distance: _distanceKm(
+                  tappedLat.toDouble(),
+                  tappedLng.toDouble(),
+                  cluster.lat,
+                  cluster.lng,
+                ),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => a.distance.compareTo(b.distance));
 
     final closest = nearest.first;
     if (closest.distance > 0.8) return;
@@ -464,7 +580,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       await _mapboxMap?.setCamera(
         mapbox.CameraOptions(
           center: mapbox.Point(
-            coordinates: mapbox.Position(closest.cluster.lng, closest.cluster.lat),
+            coordinates: mapbox.Position(
+              closest.cluster.lng,
+              closest.cluster.lat,
+            ),
           ),
           zoom: (_currentZoom + 2).clamp(12, 18),
         ),
@@ -538,7 +657,9 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          spot.brandName.isNotEmpty ? spot.brandName : spot.ownerName,
+                          spot.brandName.isNotEmpty
+                              ? spot.brandName
+                              : spot.ownerName,
                           style: TextStyle(
                             color: textColor,
                             fontSize: 18,
@@ -629,7 +750,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     final visibleCount = _visibleSpots().length;
     final initialCenter = _spots.isNotEmpty
         ? mapbox.Position(_spots.first.longitude, _spots.first.latitude)
-        : mapbox.Position(_defaultPosition.longitude, _defaultPosition.latitude);
+        : mapbox.Position(
+            _defaultPosition.longitude,
+            _defaultPosition.latitude,
+          );
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -659,7 +783,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
               children: [
                 // Compact title row
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: backgroundColor.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(12),
@@ -676,8 +803,14 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       Expanded(
                         child: Text(
                           widget.mode == PropertyMapMode.landlord
-                              ? context.tr('Ramani ya Nyumba Zangu', en: 'My Houses Map')
-                              : context.tr('Ramani ya Nyumba', en: 'Property Map'),
+                              ? context.tr(
+                                  'Ramani ya Nyumba Zangu',
+                                  en: 'My Houses Map',
+                                )
+                              : context.tr(
+                                  'Ramani ya Nyumba',
+                                  en: 'Property Map',
+                                ),
                           style: TextStyle(
                             color: textColor,
                             fontSize: 14,
@@ -689,13 +822,19 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                         onPressed: _determinePosition,
                         icon: const Icon(Icons.my_location_rounded, size: 18),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        constraints: const BoxConstraints(
+                          minWidth: 28,
+                          minHeight: 28,
+                        ),
                       ),
                       IconButton(
                         onPressed: _loadData,
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        constraints: const BoxConstraints(
+                          minWidth: 28,
+                          minHeight: 28,
+                        ),
                       ),
                     ],
                   ),
@@ -703,7 +842,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                 const SizedBox(height: 8),
                 // Floating compact search bar
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: searchBarBg.withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(10),
@@ -732,7 +874,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                               'Tafuta nyumba...',
                               en: 'Search houses...',
                             ),
-                            hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                            hintStyle: TextStyle(
+                              color: subtextColor,
+                              fontSize: 13,
+                            ),
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.zero,
                             isDense: true,
@@ -741,14 +886,21 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       ),
                       if (_searchQuery.isNotEmpty)
                         IconButton(
-                          icon: Icon(Icons.close_rounded, color: primaryColor, size: 14),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: primaryColor,
+                            size: 14,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
                             _refreshAnnotations();
                           },
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                          constraints: const BoxConstraints(
+                            minWidth: 24,
+                            minHeight: 24,
+                          ),
                         ),
                     ],
                   ),
@@ -780,7 +932,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                   children: [
                     // Properties count
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: primaryColor,
                         borderRadius: BorderRadius.circular(6),
@@ -788,7 +943,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.home_rounded, color: Colors.white, size: 10),
+                          const Icon(
+                            Icons.home_rounded,
+                            color: Colors.white,
+                            size: 10,
+                          ),
                           const SizedBox(width: 3),
                           Text(
                             visibleCount.toString(),
@@ -807,20 +966,29 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       GestureDetector(
                         onTap: _universityMenu,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: surfaceColor.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                            border: Border.all(
+                              color: primaryColor.withValues(alpha: 0.2),
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.school_rounded, color: primaryColor, size: 10),
+                              Icon(
+                                Icons.school_rounded,
+                                color: primaryColor,
+                                size: 10,
+                              ),
                               const SizedBox(width: 3),
                               Text(
-                                _selectedUniversity == 'Zote' 
-                                    ? context.tr('Vyote', en: 'All') 
+                                _selectedUniversity == 'Zote'
+                                    ? context.tr('Vyote', en: 'All')
                                     : _selectedUniversity,
                                 style: TextStyle(
                                   color: textColor,
@@ -829,7 +997,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                                 ),
                               ),
                               const SizedBox(width: 2),
-                              Icon(Icons.expand_more, color: primaryColor, size: 12),
+                              Icon(
+                                Icons.expand_more,
+                                color: primaryColor,
+                                size: 12,
+                              ),
                             ],
                           ),
                         ),
@@ -865,7 +1037,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                     // Header with close button
                     Row(
                       children: [
-                        Icon(Icons.directions_rounded, color: primaryColor, size: 20),
+                        Icon(
+                          Icons.directions_rounded,
+                          color: primaryColor,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -881,7 +1057,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                           onPressed: _clearRoute,
                           icon: const Icon(Icons.close, size: 20),
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
                         ),
                       ],
                     ),
@@ -896,7 +1075,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.navigation_rounded, color: primaryColor, size: 24),
+                            Icon(
+                              Icons.navigation_rounded,
+                              color: primaryColor,
+                              size: 24,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -921,7 +1104,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                             label: context.tr('Umbali', en: 'Distance'),
                             value: _routeDistance.isNotEmpty
                                 ? _routeDistance
-                                : context.tr('Inahesabu...', en: 'Calculating...'),
+                                : context.tr(
+                                    'Inahesabu...',
+                                    en: 'Calculating...',
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -931,7 +1117,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                             label: context.tr('Muda', en: 'Duration'),
                             value: _routeDuration.isNotEmpty
                                 ? _routeDuration
-                                : context.tr('Inahesabu...', en: 'Calculating...'),
+                                : context.tr(
+                                    'Inahesabu...',
+                                    en: 'Calculating...',
+                                  ),
                           ),
                         ),
                       ],
@@ -974,7 +1163,9 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                                       child: Text(
                                         '${index + 1}',
                                         style: TextStyle(
-                                          color: isCurrentStep ? Colors.white : primaryColor,
+                                          color: isCurrentStep
+                                              ? Colors.white
+                                              : primaryColor,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -1035,7 +1226,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Icon(Icons.my_location_rounded, color: primaryColor, size: 20),
+                    : Icon(
+                        Icons.my_location_rounded,
+                        color: primaryColor,
+                        size: 20,
+                      ),
               ),
             ),
           ),
@@ -1065,9 +1260,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       itemBuilder: (_) => [
         PopupMenuItem(
           value: 'Zote',
-          child: Text(
-            context.tr('Vyote', en: 'All'),
-          ),
+          child: Text(context.tr('Vyote', en: 'All')),
         ),
         ..._universities.map(
           (uni) => PopupMenuItem(
@@ -1116,13 +1309,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
             children: [
               Icon(icon, color: primaryColor, size: 16),
               const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: subtextColor,
-                  fontSize: 11,
-                ),
-              ),
+              Text(label, style: TextStyle(color: subtextColor, fontSize: 11)),
             ],
           ),
           const SizedBox(height: 4),
@@ -1141,7 +1328,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
   Widget _buildCompactBottomSummary(BuildContext context, int visibleCount) {
     if (_clusters.isEmpty) return const SizedBox.shrink();
-    
+
     return GestureDetector(
       onTap: () {
         _showPropertyListBottomSheet();
@@ -1263,20 +1450,32 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       width: 60,
                       height: 60,
                       color: surfaceColor,
-                      child: Icon(Icons.home_rounded, color: subtextColor, size: 24),
+                      child: Icon(
+                        Icons.home_rounded,
+                        color: subtextColor,
+                        size: 24,
+                      ),
                     ),
                     errorWidget: (context, url, error) => Container(
                       width: 60,
                       height: 60,
                       color: surfaceColor,
-                      child: Icon(Icons.broken_image, color: subtextColor, size: 24),
+                      child: Icon(
+                        Icons.broken_image,
+                        color: subtextColor,
+                        size: 24,
+                      ),
                     ),
                   )
                 : Container(
                     width: 60,
                     height: 60,
                     color: surfaceColor,
-                    child: Icon(Icons.home_rounded, color: subtextColor, size: 24),
+                    child: Icon(
+                      Icons.home_rounded,
+                      color: subtextColor,
+                      size: 24,
+                    ),
                   ),
           ),
           const SizedBox(width: 12),
@@ -1298,10 +1497,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                 const SizedBox(height: 4),
                 Text(
                   spot.location,
-                  style: TextStyle(
-                    color: subtextColor,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: subtextColor, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1319,7 +1515,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                     if (count > 1) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: primaryColor.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(4),
@@ -1366,10 +1565,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              context.tr(
-                'Tafadhali wezesha GPS',
-                en: 'Please enable GPS',
-              ),
+              context.tr('Tafadhali wezesha GPS', en: 'Please enable GPS'),
             ),
           ),
         );
@@ -1440,14 +1636,17 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
                 // Store step for real-time navigation
                 // Try to get location from maneuver
-                if (step.maneuver!.location != null && step.maneuver!.location!.length >= 2) {
-                  steps.add(_RouteStep(
-                    lat: step.maneuver!.location![1],
-                    lng: step.maneuver!.location![0],
-                    instruction: instruction,
-                    distance: step.distance ?? 0,
-                    modifier: step.maneuver!.modifier,
-                  ));
+                if (step.maneuver!.location != null &&
+                    step.maneuver!.location!.length >= 2) {
+                  steps.add(
+                    _RouteStep(
+                      lat: step.maneuver!.location![1],
+                      lng: step.maneuver!.location![0],
+                      instruction: instruction,
+                      distance: step.distance ?? 0,
+                      modifier: step.maneuver!.modifier,
+                    ),
+                  );
                 }
               }
             }
@@ -1472,10 +1671,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
       // Zoom to fit the route
       await _fitRouteToCamera([
-        mapbox.Position(_currentPosition!.longitude, _currentPosition!.latitude),
+        mapbox.Position(
+          _currentPosition!.longitude,
+          _currentPosition!.latitude,
+        ),
         mapbox.Position(spot.longitude, spot.latitude),
       ]);
-
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1590,7 +1791,9 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     await _mapboxMap?.setCamera(
       mapbox.CameraOptions(
-        center: mapbox.Point(coordinates: mapbox.Position(centerLng, centerLat)),
+        center: mapbox.Point(
+          coordinates: mapbox.Position(centerLng, centerLat),
+        ),
         zoom: 14,
       ),
     );
@@ -1607,35 +1810,60 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     _positionStreamSubscription?.cancel();
 
-    setState(() {
-      _selectedPropertyForDirections = null;
-      _routeDistance = '';
-      _routeDuration = '';
-      _turnByTurnInstructions = [];
-      _routeSteps = [];
-      _currentStepIndex = 0;
-      _nextTurnInstruction = '';
-    });
+    // Remove current location marker
+    if (_currentLocationMarker != null) {
+      final annotationManager = _annotationManager;
+      if (annotationManager != null) {
+        await annotationManager.delete(_currentLocationMarker!);
+      }
+      _currentLocationMarker = null;
+    }
+
+    if (mounted) {
+      setState(() {
+        _selectedPropertyForDirections = null;
+        _routeDistance = '';
+        _routeDuration = '';
+        _turnByTurnInstructions = [];
+        _routeSteps = [];
+        _currentStepIndex = 0;
+        _nextTurnInstruction = '';
+      });
+    }
   }
 
   void _startNavigationTracking() {
     _positionStreamSubscription?.cancel();
-    
+
     const locationSettings = geo.LocationSettings(
       accuracy: geo.LocationAccuracy.high,
       distanceFilter: 10,
     );
-    
-    _positionStreamSubscription = geo.Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-      (position) {
-        if (position == null) return;
-        _currentPosition = position;
-        _updateNextTurnInstruction(position);
-      },
-      onError: (error) {
-        // Handle location stream errors
-      },
-    );
+
+    _positionStreamSubscription =
+        geo.Geolocator.getPositionStream(
+          locationSettings: locationSettings,
+        ).listen(
+          (position) {
+            _currentPosition = position;
+            _updateNextTurnInstruction(position);
+            _updateCurrentLocationMarker(position);
+          },
+          onError: (error) {
+            // Handle location stream errors
+          },
+        );
+  }
+
+  Future<void> _updateCurrentLocationMarker(geo.Position position) async {
+    final manager = _annotationManager;
+    if (manager == null || _currentLocationMarker == null) return;
+
+    // Update marker position
+    // PointAnnotation doesn't have a direct update method for position
+    // So we delete and recreate
+    await manager.delete(_currentLocationMarker!);
+    await _addCurrentLocationMarker(position);
   }
 
   void _updateNextTurnInstruction(geo.Position currentPosition) {
