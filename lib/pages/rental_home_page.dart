@@ -145,13 +145,144 @@ class _RentalHomePageState extends State<RentalHomePage>
     });
   }
 
-  void _showAddHouseForm() => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) =>
-          HouseRegistrationForm(onHouseAdded: (_) => _refreshData()),
-    ),
-  );
+  void _showAddHouseForm() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    
+    // Check if user is landlord and verified
+    if (auth.isLandlord) {
+      try {
+        // Check verification status
+        final verificationStatus = await ApiService.getVerificationStatus();
+        
+        if (verificationStatus != null &&
+            (verificationStatus['identityStatus'] != 'verified' || 
+             verificationStatus['propertyStatus'] != 'verified')) {
+          // Show verification required dialog
+          if (mounted) {
+            _showVerificationRequiredDialog(verificationStatus);
+          }
+          return;
+        }
+      } catch (e) {
+        // If we can't check verification status, allow them to proceed (backend will handle it)
+        debugPrint('Could not check verification status: $e');
+      }
+    }
+    
+    // Allow house registration if verified or verification check failed
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              HouseRegistrationForm(onHouseAdded: (_) => _refreshData()),
+        ),
+      );
+    }
+  }
+
+  void _showVerificationRequiredDialog(Map<String, dynamic> verificationStatus) {
+    final identityStatus = verificationStatus['identityStatus'] ?? 'unknown';
+    final propertyStatus = verificationStatus['propertyStatus'] ?? 'unknown';
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.verified_user, color: Colors.orange),
+            const SizedBox(width: 8),
+            Text(context.tr('Uhakiki Unahitajika', en: 'Verification Required')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr(
+                'Lazima uwe verified kama mwenye nyumba kabla ya kuweka nyumba.',
+                en: 'You must be verified as a landlord before adding houses.',
+              ),
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            _buildVerificationStatusItem(
+              context.tr('Uhakiki wa Identity', en: 'Identity Verification'),
+              identityStatus,
+            ),
+            const SizedBox(height: 8),
+            _buildVerificationStatusItem(
+              context.tr('Uhakiki wa Mali', en: 'Property Verification'),
+              propertyStatus,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.tr('Funga', en: 'Close')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LandlordVerificationPage(),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(context.tr('Nenda kwa Uhakiki', en: 'Go to Verification')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerificationStatusItem(String label, String status) {
+    IconData icon;
+    Color color;
+    
+    switch (status.toLowerCase()) {
+      case 'verified':
+        icon = Icons.check_circle;
+        color = Colors.green;
+        break;
+      case 'pending':
+        icon = Icons.pending;
+        color = Colors.orange;
+        break;
+      case 'rejected':
+        icon = Icons.cancel;
+        color = Colors.red;
+        break;
+      default:
+        icon = Icons.help_outline;
+        color = Colors.grey;
+    }
+    
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '$label: ${status.toUpperCase()}',
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<void> _logout() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -583,13 +714,48 @@ class _RentalHomePageState extends State<RentalHomePage>
             MaterialPageRoute(builder: (_) => const AdminMapPage()),
           ),
         ),
-        _navIcon(
-          Icons.notifications_outlined,
-          isDark,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NotificationScreen()),
-          ),
+        Stack(
+          children: [
+            _navIcon(
+              Icons.notifications_outlined,
+              isDark,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              ),
+            ),
+            FutureBuilder<List<dynamic>>(
+              future: ApiService.getNotifications(limit: 50),
+              builder: (context, snapshot) {
+                final unreadCount = snapshot.data?.where((n) => n['read'] == false).length ?? 0;
+                if (unreadCount == 0) return const SizedBox.shrink();
+                return Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      unreadCount > 9 ? '9+' : unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         _navIcon(
           isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
@@ -1314,9 +1480,9 @@ class _RentalHomePageState extends State<RentalHomePage>
             enableInfiniteScroll: true,
             viewportFraction: 0.93,
             enlargeCenterPage: true,
-            onPageChanged: (i, _) => setState(() => _currentCarouselIndex = i),
+            onPageChanged: (i, reason) => setState(() => _currentCarouselIndex = i),
           ),
-          itemBuilder: (_, i, __) {
+          itemBuilder: (context, i, _) {
             final house = houses[i];
             final occupied = house.status == 'Imekodishwa';
             return Container(

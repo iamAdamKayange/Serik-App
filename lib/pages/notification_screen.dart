@@ -17,7 +17,7 @@ class NotificationScreen extends StatefulWidget {
 
 class _NotificationScreenState extends State<NotificationScreen> {
   late Future<List<dynamic>> _notificationsFuture;
-  String _selectedFilter = 'all'; // all, applications, payments, houses
+  String _selectedFilter = 'all'; // all, houses
 
   @override
   void initState() {
@@ -129,7 +129,26 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _markNotificationRead(Object? notificationId) async {
-    await _deleteNotification(notificationId);
+    if (notificationId == null) return;
+    final success = await ApiService.markNotificationAsRead(
+      notificationId.toString(),
+    );
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'Imeshindikana kuhifadhi notification.',
+              en: 'Could not mark notification as read.',
+            ),
+          ),
+        ),
+      );
+    }
+    setState(() {
+      _notificationsFuture = ApiService.getNotifications();
+    });
   }
 
   IconData _getNotificationIcon(String title, String body) {
@@ -319,18 +338,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     primaryColor,
                   ),
                   _buildFilterChip(
-                    context.tr('Maombi ya Nyumba', en: 'House Applications'),
-                    'applications',
-                    isDark,
-                    primaryColor,
-                  ),
-                  _buildFilterChip(
-                    context.tr('Malipo & Kodi', en: 'Payments & Rent'),
-                    'payments',
-                    isDark,
-                    primaryColor,
-                  ),
-                  _buildFilterChip(
                     context.tr('Nyumba Mpya', en: 'New Houses'),
                     'houses',
                     isDark,
@@ -438,16 +445,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     notifications = notifications.where((item) {
                       final title = (item['title'] ?? '').toString().toLowerCase();
                       final body = (item['body'] ?? '').toString().toLowerCase();
-                      if (_selectedFilter == 'applications') {
-                        return title.contains('ombi') ||
-                            title.contains('maombi') ||
-                            body.contains('maombi') ||
-                            body.contains('kubaliwa');
-                      } else if (_selectedFilter == 'payments') {
-                        return title.contains('kodi') ||
-                            title.contains('malipo') ||
-                            body.contains('kodi');
-                      } else if (_selectedFilter == 'houses') {
+                      if (_selectedFilter == 'houses') {
                         return title.contains('nyumba') ||
                             body.contains('chuo') ||
                             body.contains('vyumba');

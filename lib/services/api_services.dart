@@ -457,6 +457,36 @@ class ApiService {
     }
   }
 
+  static Future<bool> markNotificationAsRead(String notificationId) async {
+    try {
+      final headers = await _getHeaders();
+      final fcmToken = await _readFcmToken();
+      
+      if (fcmToken == null) {
+        debugPrint('markNotificationAsRead: FCM token not available');
+        return false;
+      }
+      
+      final url = Uri.parse(
+        '$baseUrl$apiPrefix/notifications/$notificationId/read?token=${Uri.encodeQueryComponent(fcmToken)}',
+      );
+      final response = await http.put(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        await _clearListCache(_notificationsCacheKey);
+        RealtimeService.instance.emit('notification:changed', {
+          'action': 'read',
+          'notificationId': notificationId,
+        });
+        return true;
+      }
+      debugPrint('markNotificationAsRead failed: ${response.statusCode}');
+      return false;
+    } catch (e) {
+      debugPrint('❌ markNotificationAsRead error: $e');
+      return false;
+    }
+  }
+
   static Future<String?> _readFcmToken() async {
     try {
       final token = await FirebaseMessaging.instance.getToken();
