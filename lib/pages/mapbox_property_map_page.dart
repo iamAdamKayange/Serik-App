@@ -196,19 +196,24 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     _mapboxMap = mapboxMap;
     _annotationManager = await mapboxMap.annotations.createPointAnnotationManager();
     _polylineManager = await mapboxMap.annotations.createPolylineAnnotationManager();
-    
+
     // Set camera bounds for Tanzania/East Africa
     await mapboxMap.setBounds(
       mapbox.CameraBoundsOptions(
-        bounds: mapbox.Bounds(
-          northeast: mapbox.Position(41.0, -1.0),
-          southwest: mapbox.Position(29.0, -12.0),
+        bounds: mapbox.CoordinateBounds(
+          southwest: mapbox.Point(
+            coordinates: mapbox.Position(29.0, -12.0),
+          ),
+          northeast: mapbox.Point(
+            coordinates: mapbox.Position(41.0, -1.0),
+          ),
+          infiniteBounds: false,
         ),
         minZoom: 5.0,
         maxZoom: 18.0,
       ),
     );
-    
+
     await mapboxMap.location.updateSettings(
       mapbox.LocationComponentSettings(enabled: true, pulsingEnabled: true),
     );
@@ -351,7 +356,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     final fill = isCluster ? const Color(0xFF0F8B61) : primaryColor;
 
     // Google Maps-style pin body (rounded at top, pointed at bottom)
-    final pinPath = Path();
+    var pinPath = Path();
     final pinWidth = isCluster ? 50.0 : 44.0;
     final pinHeight = isCluster ? 70.0 : 64.0;
     final pinX = size / 2;
@@ -376,7 +381,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     // Draw pin body
     final pinPaint = Paint()..color = fill;
-    final pinPath = Path()
+    pinPath = Path()
       ..moveTo(pinX - pinWidth / 2, pinY - pinHeight / 2)
       ..lineTo(pinX + pinWidth / 2, pinY - pinHeight / 2)
       ..quadraticBezierTo(pinX + pinWidth / 2, pinY + pinHeight / 2, pinX, pinY + pinHeight / 2)
@@ -384,7 +389,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       ..lineTo(pinX, pinY + pinHeight / 2)
       ..quadraticBezierTo(pinX - pinWidth / 2, pinY + pinHeight / 2, pinX - pinWidth / 2, pinY - pinHeight / 2)
       ..close();
-    
+
     canvas.drawPath(pinPath, pinPaint);
 
     // Draw white border
@@ -1344,9 +1349,9 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         throw Exception('Mapbox token not found');
       }
 
-      final mapbox = MapboxApi(accessToken: mapboxToken);
+      final mapboxApi = MapboxApi(accessToken: mapboxToken);
 
-      final response = await mapbox.directions.request(
+      final response = await mapboxApi.directions.request(
         profile: NavigationProfile.DRIVING,
         overview: NavigationOverview.FULL,
         geometries: NavigationGeometries.POLYLINE6,
@@ -1361,11 +1366,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         throw Exception('Directions error: ${response.error}');
       }
 
-      if (response.routes.isEmpty) {
+      if (response.routes == null || response.routes!.isEmpty) {
         throw Exception('No route found');
       }
 
-      final route = response.routes.first;
+      final route = response.routes!.first;
 
       // Parse distance and duration
       final distance = route.distance ?? 0;
@@ -1443,26 +1448,24 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     return '$minutes min';
   }
 
-  String _parseManeuver(String modifier) {
-    switch (modifier.toLowerCase()) {
-      case 'left':
+  String _parseManeuver(NavigationManeuverModifier modifier) {
+    switch (modifier) {
+      case NavigationManeuverModifier.LEFT:
         return context.tr('Geuka kushoto', en: 'Turn left');
-      case 'right':
+      case NavigationManeuverModifier.RIGHT:
         return context.tr('Geuka kulia', en: 'Turn right');
-      case 'slight left':
+      case NavigationManeuverModifier.SLIGHT_LEFT:
         return context.tr('Geuka kushoto kidogo', en: 'Turn slight left');
-      case 'slight right':
+      case NavigationManeuverModifier.SLIGHT_RIGHT:
         return context.tr('Geuka kulia kidogo', en: 'Turn slight right');
-      case 'sharp left':
+      case NavigationManeuverModifier.SHARP_LEFT:
         return context.tr('Geuka kushoto vibaya', en: 'Turn sharp left');
-      case 'sharp right':
+      case NavigationManeuverModifier.SHARP_RIGHT:
         return context.tr('Geuka kulia vibaya', en: 'Turn sharp right');
-      case 'uturn':
+      case NavigationManeuverModifier.UTURN:
         return context.tr('Rudi nyuma', en: 'U-turn');
-      case 'straight':
+      case NavigationManeuverModifier.STRAIGHT:
         return context.tr('Endelea moja kwa moja', en: 'Continue straight');
-      default:
-        return modifier;
     }
   }
 
@@ -1477,21 +1480,23 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     }
 
     // Decode polyline
-    final decoded = PolylineTools().decodePolyline(encodedPolyline);
-    final positions = decoded.map((coord) {
-      return mapbox.Position(coord[1], coord[0]); // Note: Mapbox uses [lng, lat]
+    final decoded = PolylineTools.decodePolyline(encodedPolyline);
+    final points = decoded.map((latLng) {
+      return mapbox.Point(
+        coordinates: mapbox.Position(latLng.longitude, latLng.latitude),
+      );
     }).toList();
 
-    if (positions.isEmpty) return;
+    if (points.isEmpty) return;
 
     // Create LineString
-    final lineString = mapbox.LineString.fromPositions(positions);
+    final lineString = mapbox.LineString.fromPoints(points: points);
 
     // Create polyline annotation
     final annotation = await manager.create(
       mapbox.PolylineAnnotationOptions(
         geometry: lineString,
-        lineColor: const Color(0xFF4CAF50).value,
+        lineColor: const Color(0xFF4CAF50).toARGB32(),
         lineWidth: 5.0,
         lineOpacity: 0.8,
       ),
@@ -1513,15 +1518,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     final maxLng = lngs.reduce((a, b) => a > b ? a : b);
     final minLat = lats.reduce((a, b) => a < b ? a : b);
     final maxLat = lats.reduce((a, b) => a > b ? a : b);
-
-    // Add padding
-    final padding = 0.1;
-    final bounds = mapbox.CameraBoundsOptions(
-      bounds: mapbox.Bounds(
-        northeast: mapbox.Position(maxLng + padding, maxLat + padding),
-        southwest: mapbox.Position(minLng - padding, minLat - padding),
-      ),
-    );
 
     // Calculate center
     final centerLng = (minLng + maxLng) / 2;
