@@ -96,8 +96,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   List<RentalSpot> _spots = [];
   List<_ClusterBucket> _clusters = [];
 
-  bool get isDarkMode =>
-      Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+  bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
   Color get primaryColor =>
       isDarkMode ? const Color(0xFF4CAF50) : const Color(0xFF2E7D32);
   Color get surfaceColor => isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
@@ -762,12 +761,14 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           // Map fills entire available space
           Positioned.fill(
             child: mapbox.MapWidget(
-              key: const ValueKey('mapbox-property-map'),
+              key: ValueKey('mapbox-property-map-${isDarkMode}'),
               cameraOptions: mapbox.CameraOptions(
                 center: mapbox.Point(coordinates: initialCenter),
                 zoom: 12,
               ),
-              styleUri: mapbox.MapboxStyles.MAPBOX_STREETS,
+              styleUri: isDarkMode
+                  ? mapbox.MapboxStyles.DARK
+                  : mapbox.MapboxStyles.MAPBOX_STREETS,
               textureView: true,
               onMapCreated: _onMapCreated,
               onCameraChangeListener: _onCameraChangeListener,

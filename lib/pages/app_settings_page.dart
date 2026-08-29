@@ -91,16 +91,15 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                 const SizedBox(height: 8),
                 _SettingsTile(
                   title: l10n.tr('Language', en: 'Language'),
-                  subtitle: l10n.tr('Change app language', en: 'Change app language'),
+                  subtitle: locale == 'sw' ? 'Kiswahili' : 'English',
                   icon: Icons.language_rounded,
-                  onTap: () {
-                    // TODO: Implement language selection
-                  },
+                  onTap: () => _showLanguageDialog(locale, isDark, card, text, sub, primary),
                   isDark: isDark,
                   card: card,
                   text: text,
                   sub: sub,
                   primary: primary,
+                  trailing: Icon(Icons.chevron_right_rounded, color: sub, size: 20),
                 ),
                 _SettingsTile(
                   title: l10n.tr('Appearance', en: 'Appearance'),
@@ -367,6 +366,111 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showLanguageDialog(
+    String currentLocale,
+    bool isDark,
+    Color card,
+    Color text,
+    Color sub,
+    Color primary,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: card,
+        title: Text(
+          'Language',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LanguageOption(
+              label: 'Kiswahili',
+              code: 'sw',
+              isSelected: currentLocale == 'sw',
+              onTap: () {
+                Navigator.pop(context);
+                context.read<ThemeProvider>().setLocale(const Locale('sw'));
+              },
+              isDark: isDark,
+              primary: primary,
+            ),
+            const SizedBox(height: 8),
+            _LanguageOption(
+              label: 'English',
+              code: 'en',
+              isSelected: currentLocale == 'en',
+              onTap: () {
+                Navigator.pop(context);
+                context.read<ThemeProvider>().setLocale(const Locale('en'));
+              },
+              isDark: isDark,
+              primary: primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageOption extends StatelessWidget {
+  const _LanguageOption({
+    required this.label,
+    required this.code,
+    required this.isSelected,
+    required this.onTap,
+    required this.isDark,
+    required this.primary,
+  });
+
+  final String label;
+  final String code;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool isDark;
+  final Color primary;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? primary.withValues(alpha: 0.15)
+              : (isDark ? const Color(0xFF26312D) : const Color(0xFFE2E8E5)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? primary
+                : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            if (isSelected)
+              Icon(Icons.check_circle_rounded, color: primary, size: 20)
+            else
+              const SizedBox(width: 20),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? primary : (isDark ? Colors.white70 : const Color(0xFF475569)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
