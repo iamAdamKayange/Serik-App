@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -72,6 +73,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   String _routeDuration = '';
   List<String> _turnByTurnInstructions = [];
   geo.Position? _currentPosition;
+  
+  // Real-time navigation state
+  List<_RouteStep> _routeSteps = [];
+  int _currentStepIndex = 0;
+  String _nextTurnInstruction = '';
+  StreamSubscription<geo.Position>? _positionStreamSubscription;
 
   geo.Position get _defaultPosition => geo.Position(
     latitude: -6.7924,
@@ -114,6 +121,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   void dispose() {
     _searchController.dispose();
     _clearRoute();
+    _positionStreamSubscription?.cancel();
     super.dispose();
   }
 
@@ -834,7 +842,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           // Directions overlay (shown when route is active)
           if (_selectedPropertyForDirections != null)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 200,
+              bottom: 16,
               left: 12,
               right: 12,
               child: Container(
@@ -878,6 +886,32 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    // Next turn instruction (prominent)
+                    if (_nextTurnInstruction.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.navigation_rounded, color: primaryColor, size: 24),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _nextTurnInstruction,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 12),
                     // Distance and duration
                     Row(
                       children: [
@@ -903,12 +937,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // Turn-by-turn instructions
+                    // Turn-by-turn instructions list (collapsed)
                     if (_turnByTurnInstructions.isNotEmpty) ...[
                       const Divider(height: 1),
                       const SizedBox(height: 12),
                       Text(
-                        context.tr('Maelekezo:', en: 'Instructions:'),
+                        context.tr('Maelekezo yote:', en: 'All instructions:'),
                         style: TextStyle(
                           color: subtextColor,
                           fontSize: 12,
@@ -917,11 +951,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                       ),
                       const SizedBox(height: 8),
                       Container(
-                        constraints: const BoxConstraints(maxHeight: 150),
+                        constraints: const BoxConstraints(maxHeight: 120),
                         child: ListView.builder(
                           shrinkWrap: true,
                           itemCount: _turnByTurnInstructions.length,
                           itemBuilder: (context, index) {
+                            final isCurrentStep = index == _currentStepIndex;
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(
@@ -930,14 +965,16 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                                     width: 24,
                                     height: 24,
                                     decoration: BoxDecoration(
-                                      color: primaryColor.withValues(alpha: 0.2),
+                                      color: isCurrentStep
+                                          ? primaryColor
+                                          : primaryColor.withValues(alpha: 0.2),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Center(
                                       child: Text(
                                         '${index + 1}',
                                         style: TextStyle(
-                                          color: primaryColor,
+                                          color: isCurrentStep ? Colors.white : primaryColor,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -949,8 +986,13 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
                                     child: Text(
                                       _turnByTurnInstructions[index],
                                       style: TextStyle(
-                                        color: textColor,
+                                        color: isCurrentStep
+                                            ? primaryColor
+                                            : textColor,
                                         fontSize: 13,
+                                        fontWeight: isCurrentStep
+                                            ? FontWeight.w700
+                                            : FontWeight.normal,
                                       ),
                                     ),
                                   ),
@@ -1341,6 +1383,9 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       _routeDistance = '';
       _routeDuration = '';
       _turnByTurnInstructions = [];
+      _routeSteps = [];
+      _currentStepIndex = 0;
+      _nextTurnInstruction = '';
     });
 
     try {
@@ -1381,8 +1426,10 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         _routeDuration = _formatDuration(duration);
       });
 
-      // Parse turn-by-turn instructions
+      // Parse turn-by-turn instructions and route steps for real-time navigation
       final instructions = <String>[];
+      final steps = <_RouteStep>[];
+
       if (route.legs != null) {
         for (final leg in route.legs!) {
           if (leg.steps != null) {
@@ -1390,6 +1437,18 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
               if (step.maneuver != null && step.maneuver!.modifier != null) {
                 final instruction = _parseManeuver(step.maneuver!.modifier!);
                 instructions.add(instruction);
+
+                // Store step for real-time navigation
+                // Try to get location from maneuver
+                if (step.maneuver!.location != null && step.maneuver!.location!.length >= 2) {
+                  steps.add(_RouteStep(
+                    lat: step.maneuver!.location![1],
+                    lng: step.maneuver!.location![0],
+                    instruction: instruction,
+                    distance: step.distance ?? 0,
+                    modifier: step.maneuver!.modifier,
+                  ));
+                }
               }
             }
           }
@@ -1398,12 +1457,18 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
       setState(() {
         _turnByTurnInstructions = instructions;
+        _routeSteps = steps;
+        _currentStepIndex = 0;
+        _nextTurnInstruction = steps.isNotEmpty ? steps[0].instruction : '';
       });
 
       // Draw the route on the map
       if (route.geometry != null) {
         await _drawRoute(route.geometry!);
       }
+
+      // Start position stream for real-time turn updates
+      _startNavigationTracking();
 
       // Zoom to fit the route
       await _fitRouteToCamera([
@@ -1540,12 +1605,61 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       _routePolyline = null;
     }
 
+    _positionStreamSubscription?.cancel();
+
     setState(() {
       _selectedPropertyForDirections = null;
       _routeDistance = '';
       _routeDuration = '';
       _turnByTurnInstructions = [];
+      _routeSteps = [];
+      _currentStepIndex = 0;
+      _nextTurnInstruction = '';
     });
+  }
+
+  void _startNavigationTracking() {
+    _positionStreamSubscription?.cancel();
+    
+    const locationSettings = geo.LocationSettings(
+      accuracy: geo.LocationAccuracy.high,
+      distanceFilter: 10,
+    );
+    
+    _positionStreamSubscription = geo.Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (position) {
+        if (position == null) return;
+        _currentPosition = position;
+        _updateNextTurnInstruction(position);
+      },
+      onError: (error) {
+        // Handle location stream errors
+      },
+    );
+  }
+
+  void _updateNextTurnInstruction(geo.Position currentPosition) {
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
+
+    final currentStep = _routeSteps[_currentStepIndex];
+    final distanceToStep = _distanceKm(
+      currentPosition.latitude,
+      currentPosition.longitude,
+      currentStep.lat,
+      currentStep.lng,
+    );
+
+    // If within 20 meters of the current step, move to next step
+    if (distanceToStep < 0.02) {
+      setState(() {
+        _currentStepIndex++;
+        if (_currentStepIndex < _routeSteps.length) {
+          _nextTurnInstruction = _routeSteps[_currentStepIndex].instruction;
+        } else {
+          _nextTurnInstruction = context.tr('Umefika', en: 'You have arrived');
+        }
+      });
+    }
   }
 }
 
@@ -1562,4 +1676,20 @@ class _ClusterBucket {
 
   String get cacheKey =>
       '${lat.toStringAsFixed(4)}:${lng.toStringAsFixed(4)}:${spots.length}';
+}
+
+class _RouteStep {
+  final double lat;
+  final double lng;
+  final String instruction;
+  final double distance;
+  final NavigationManeuverModifier? modifier;
+
+  const _RouteStep({
+    required this.lat,
+    required this.lng,
+    required this.instruction,
+    required this.distance,
+    this.modifier,
+  });
 }
