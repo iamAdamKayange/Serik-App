@@ -76,9 +76,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final data = item['data'] is Map<String, dynamic>
         ? item['data'] as Map<String, dynamic>
         : <String, dynamic>{};
-    final dataType = ((data['notificationType'] ?? item['type'] ?? '')
-            .toString())
-        .toLowerCase();
+    final dataType =
+        ((data['notificationType'] ?? item['type'] ?? '').toString())
+            .toLowerCase();
     final houseId = item['house_id'] ?? data['houseId'];
 
     if (dataType == 'verification' ||
@@ -89,7 +89,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       await AppNavigationService.openFromNotification({
         ...data,
         ...item,
-        if (houseId != null) 'houseId': houseId,
+        'houseId': ?houseId,
       });
       return;
     }
@@ -99,17 +99,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
       return;
     }
 
-    await AppNavigationService.openFromNotification({
-      ...data,
-      ...item,
-    });
+    await AppNavigationService.openFromNotification({...data, ...item});
   }
 
   Future<void> _deleteNotification(Object? notificationId) async {
     if (notificationId == null) return;
-    final success = await ApiService.deleteNotification(
-      notificationId.toString(),
-    );
+    
+    // Check if it's a fake notification (string ID starting with 'notif-')
+    final idString = notificationId.toString();
+    if (idString.startsWith('notif-')) {
+      // Just remove from UI locally for fake notifications
+      setState(() {
+        _notificationsFuture = _notificationsFuture.then((notifications) {
+          return notifications.where((n) => n['id']?.toString() != idString).toList();
+        });
+      });
+      return;
+    }
+    
+    final success = await ApiService.deleteNotification(idString);
     if (!mounted) return;
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -130,9 +138,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Future<void> _markNotificationRead(Object? notificationId) async {
     if (notificationId == null) return;
-    final success = await ApiService.markNotificationAsRead(
-      notificationId.toString(),
-    );
+    
+    // Check if it's a fake notification
+    final idString = notificationId.toString();
+    if (idString.startsWith('notif-')) {
+      // Just mark as read locally for fake notifications
+      setState(() {
+        _notificationsFuture = _notificationsFuture.then((notifications) {
+          return notifications.map((n) {
+            if (n['id']?.toString() == idString) {
+              return {...n, 'read': true};
+            }
+            return n;
+          }).toList();
+        });
+      });
+      return;
+    }
+    
+    final success = await ApiService.markNotificationAsRead(idString);
     if (!mounted) return;
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -216,18 +240,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
       OutlinedButton.icon(
         onPressed: () => _markNotificationRead(notificationId),
         icon: const Icon(Icons.done_rounded, size: 18),
-        label: Text(
-          context.tr(
-            'Mark read',
-            en: 'Mark read',
-          ),
-        ),
+        label: Text(context.tr('Mark read', en: 'Mark read')),
       ),
     ];
 
     if (isAppNotif) {
-      final primaryLabel = dataType == 'verification' ||
-              dataType.startsWith('verification_')
+      final primaryLabel =
+          dataType == 'verification' || dataType.startsWith('verification_')
           ? context.tr('Verify now', en: 'Verify now')
           : context.tr('Open', en: 'Open');
       buttons.insert(
@@ -246,17 +265,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
       buttons.insert(
         0,
         FilledButton.icon(
-          onPressed: () => _openNotificationHouse(
-            data: data,
-            houseId: houseId,
-          ),
+          onPressed: () => _openNotificationHouse(data: data, houseId: houseId),
           icon: const Icon(Icons.home_rounded, size: 18),
-          label: Text(
-            context.tr(
-              'Open house',
-              en: 'Open house',
-            ),
-          ),
+          label: Text(context.tr('Open house', en: 'Open house')),
           style: FilledButton.styleFrom(
             backgroundColor: notifColor,
             foregroundColor: Colors.white,
@@ -265,11 +276,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       );
     }
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: buttons,
-    );
+    return Wrap(spacing: 10, runSpacing: 10, children: buttons);
   }
 
   @override
@@ -280,8 +287,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
         : const Color(0xFF0F8B61);
     final bgColor = isDark ? const Color(0xFF0D1110) : const Color(0xFFF7F9F8);
     final cardBg = isDark ? const Color(0xFF171C1A) : Colors.white;
-    final textColor = isDark ? const Color(0xFFF2F7F4) : const Color(0xFF15201C);
-    final subtextColor = isDark ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280);
+    final textColor = isDark
+        ? const Color(0xFFF2F7F4)
+        : const Color(0xFF15201C);
+    final subtextColor = isDark
+        ? const Color(0xFF9CA3AF)
+        : const Color(0xFF6B7280);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -289,10 +300,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         backgroundColor: cardBg,
         elevation: 0,
         title: Text(
-          context.tr(
-            'Arifa & Taarifa',
-            en: 'Notifications',
-          ),
+          context.tr('Arifa & Taarifa', en: 'Notifications'),
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -302,10 +310,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.tune_rounded),
-            tooltip: context.tr(
-              'Miingiliano ya Akili',
-              en: 'Smart alerts',
-            ),
+            tooltip: context.tr('Miingiliano ya Akili', en: 'Smart alerts'),
             onPressed: () {
               Navigator.push(
                 context,
@@ -389,62 +394,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
                   var notifications = snapshot.data ?? [];
 
-                  // If empty, let's provide default interactive tenant notifications
-                  if (notifications.isEmpty) {
-                    notifications = [
-                      {
-                        'id': 'notif-1',
-                        'title': context.tr(
-                          'Maombi Yako Yamekubaliwa! 🎉',
-                          en: 'Your Application Accepted! 🎉',
-                        ),
-                        'body': context.tr(
-                          'Mwenye nyumba wa "Apartment ya Kisasa - Makumbusho" amekubali maombi yako. Unaweza kulipa deposit sasa ili kuhifadhi nyumba.',
-                          en: 'The landlord of "Modern Apartment - Makumbusho" has accepted your application. You can pay the deposit now to secure the house.',
-                        ),
-                        'created_at': DateTime.now()
-                            .subtract(const Duration(minutes: 45))
-                            .toIso8601String(),
-                        'type': 'application',
-                      },
-                      {
-                        'id': 'notif-2',
-                        'title': context.tr(
-                          'Kumbukumbu ya Malipo ya Kodi 💡',
-                          en: 'Rent Payment Reminder 💡',
-                        ),
-                        'body': context.tr(
-                          'Kodi ya mwezi ujao kwa nyumba ya Sinza Mori inatarajiwa kulipwa ndani ya siku 14.',
-                          en: 'Next month rent for the Sinza Mori house is expected to be paid within 14 days.',
-                        ),
-                        'created_at': DateTime.now()
-                            .subtract(const Duration(days: 1))
-                            .toIso8601String(),
-                        'type': 'payment',
-                      },
-                      {
-                        'id': 'notif-3',
-                        'title': context.tr(
-                          'Nyumba Mpya Karibu na UDOM! 🎓',
-                          en: 'New House Near UDOM! 🎓',
-                        ),
-                        'body': context.tr(
-                          'Vyumba 4 vipya vya wanafunzi vyenye tiles na maji ndani vimeongezwa Chuo Kikuu Dodoma.',
-                          en: '4 new student rooms with tiles and running water have been added at the University of Dodoma.',
-                        ),
-                        'created_at': DateTime.now()
-                            .subtract(const Duration(days: 2))
-                            .toIso8601String(),
-                        'type': 'house',
-                      },
-                    ];
-                  }
-
                   // Apply filter
                   if (_selectedFilter != 'all') {
                     notifications = notifications.where((item) {
-                      final title = (item['title'] ?? '').toString().toLowerCase();
-                      final body = (item['body'] ?? '').toString().toLowerCase();
+                      final title = (item['title'] ?? '')
+                          .toString()
+                          .toLowerCase();
+                      final body = (item['body'] ?? '')
+                          .toString()
+                          .toLowerCase();
                       if (_selectedFilter == 'houses') {
                         return title.contains('nyumba') ||
                             body.contains('chuo') ||
@@ -454,12 +412,53 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     }).toList();
                   }
 
+                  // Show empty state instead of fake notifications
+                  if (notifications.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.notifications_none_outlined,
+                              size: 64,
+                              color: subtextColor.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              context.tr(
+                                'Hakuna arifa kwa sasa',
+                                en: 'No notifications yet',
+                              ),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              context.tr(
+                                'Arifa zako zitatokea hapa',
+                                en: 'Your notifications will appear here',
+                              ),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: subtextColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
                   return ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: notifications.length,
                     itemBuilder: (context, index) {
-                      final item =
-                          notifications[index] as Map<String, dynamic>;
+                      final item = notifications[index] as Map<String, dynamic>;
                       final data = item['data'] is Map<String, dynamic>
                           ? item['data'] as Map<String, dynamic>
                           : <String, dynamic>{};
@@ -467,18 +466,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       final canOpen = houseId != null;
                       final title = item['title']?.toString() ?? '';
                       final body = item['body']?.toString() ?? '';
-                      final dataType = ((item['data'] is Map<String, dynamic>
-                              ? item['data']['notificationType']
-                              : null) ??
-                          item['type'] ??
-                          '')
-                          .toString()
-                          .toLowerCase();
+                      final dataType =
+                          ((item['data'] is Map<String, dynamic>
+                                      ? item['data']['notificationType']
+                                      : null) ??
+                                  item['type'] ??
+                                  '')
+                              .toString()
+                              .toLowerCase();
                       final notifIcon = _getNotificationIcon(title, body);
                       final notifColor = _getNotificationColor(title, body);
                       final notificationId = item['id']?.toString();
+                      final isRead = item['read'] == true;
 
-                      final isAppNotif = dataType == 'verification' ||
+                      final isAppNotif =
+                          dataType == 'verification' ||
                           dataType.startsWith('verification_') ||
                           dataType == 'payment' ||
                           dataType == 'maintenance' ||
@@ -513,9 +515,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             color: cardBg,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: isDark
-                                  ? const Color(0xFF26312D)
-                                  : const Color(0xFFE2E8E5),
+                              color: isRead
+                                  ? Colors.transparent
+                                  : (isDark
+                                      ? const Color(0xFF26312D)
+                                      : const Color(0xFFE2E8E5)),
+                              width: isRead ? 0 : 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -540,8 +545,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color:
-                                          notifColor.withValues(alpha: 0.12),
+                                      color: notifColor.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
@@ -565,8 +569,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                                 title,
                                                 style: TextStyle(
                                                   fontSize: 14,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: textColor,
+                                                  fontWeight: isRead 
+                                                      ? FontWeight.w500 
+                                                      : FontWeight.w800,
+                                                  color: isRead 
+                                                      ? subtextColor 
+                                                      : textColor,
                                                 ),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
