@@ -1485,4 +1485,37 @@ class ApiService {
       return false;
     }
   }
+
+  /// Get Mapbox directions
+  static Future<Map<String, dynamic>?> getMapboxDirections(
+    double originLng,
+    double originLat,
+    double destinationLng,
+    double destinationLat,
+  ) async {
+    try {
+      // Note: You'll need to add your Mapbox access token to environment variables or configuration
+      const mapboxAccessToken = String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
+      if (mapboxAccessToken.isEmpty) {
+        debugPrint('Mapbox access token not configured');
+        return null;
+      }
+
+      final url = Uri.parse(
+        'https://api.mapbox.com/directions/v5/mapbox/driving/$originLng,$originLat;$destinationLng,$destinationLat'
+        '?overview=full&geometries=geojson&steps=true&access_token=$mapboxAccessToken',
+      );
+
+      final response = await http.get(url).timeout(timeout);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        debugPrint('Mapbox directions error: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ getMapboxDirections error: $e');
+      return null;
+    }
+  }
 }
