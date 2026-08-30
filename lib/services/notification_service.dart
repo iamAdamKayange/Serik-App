@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -35,6 +36,20 @@ const AndroidNotificationChannel _verificationChannel =
       description: 'Arifa za uthibitishaji wa landlord',
       importance: Importance.high,
     );
+const AndroidNotificationChannel _verificationRejectedChannel =
+    AndroidNotificationChannel(
+      'serik_verification_rejected',
+      'Uthibitishaji Umekataliwa',
+      description: 'Arifa za uthibitishaji uliokataliwa',
+      importance: Importance.high,
+    );
+const AndroidNotificationChannel _verificationReminderChannel =
+    AndroidNotificationChannel(
+      'serik_verification_reminder',
+      'Kumbusho la Uthibitishaji',
+      description: 'Kumbusho la uthibitishaji kwa wasiomaliza',
+      importance: Importance.high,
+    );
 const AndroidNotificationChannel _maintenanceChannel =
     AndroidNotificationChannel(
       'serik_maintenance',
@@ -64,6 +79,8 @@ const String _darwinCategoryGeneral = 'serik_general_actions';
 const String _darwinCategoryHouses = 'serik_house_actions';
 const String _darwinCategoryPayments = 'serik_payment_actions';
 const String _darwinCategoryVerification = 'serik_verification_actions';
+const String _darwinCategoryVerificationRejected = 'serik_verification_rejected_actions';
+const String _darwinCategoryVerificationReminder = 'serik_verification_reminder_actions';
 const String _darwinCategoryMaintenance = 'serik_maintenance_actions';
 const String _darwinCategoryAlerts = 'serik_alert_actions';
 
@@ -87,6 +104,14 @@ final DarwinNotificationAction _darwinVerifyAction =
     DarwinNotificationAction.plain(
       _actionVerifyNow,
       'Verify now',
+      options: <DarwinNotificationActionOption>{
+        DarwinNotificationActionOption.foreground,
+      },
+    );
+final DarwinNotificationAction _darwinTryAgainAction =
+    DarwinNotificationAction.plain(
+      'serik_action_try_again',
+      'Try again',
       options: <DarwinNotificationActionOption>{
         DarwinNotificationActionOption.foreground,
       },
@@ -117,6 +142,28 @@ final List<DarwinNotificationCategory> _darwinNotificationCategories =
       ),
       DarwinNotificationCategory(
         _darwinCategoryVerification,
+        actions: <DarwinNotificationAction>[
+          _darwinOpenAction,
+          _darwinVerifyAction,
+          _darwinDismissAction,
+        ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.customDismissAction,
+        },
+      ),
+      DarwinNotificationCategory(
+        _darwinCategoryVerificationRejected,
+        actions: <DarwinNotificationAction>[
+          _darwinOpenAction,
+          _darwinTryAgainAction,
+          _darwinDismissAction,
+        ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.customDismissAction,
+        },
+      ),
+      DarwinNotificationCategory(
+        _darwinCategoryVerificationReminder,
         actions: <DarwinNotificationAction>[
           _darwinOpenAction,
           _darwinVerifyAction,
@@ -162,6 +209,7 @@ class NotificationService {
   static final NotificationService instance = NotificationService._();
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  static final AudioPlayer _audioPlayer = AudioPlayer();
 
   static const int _dailyReminderId = 4801;
   static const String _installCutoffKey = 'notification_install_cutoff_at';
@@ -200,6 +248,7 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(_newHousesChannel);
     await androidPlugin?.createNotificationChannel(_paymentChannel);
     await androidPlugin?.createNotificationChannel(_verificationChannel);
+    await androidPlugin?.createNotificationChannel(_verificationRejectedChannel);
     await androidPlugin?.createNotificationChannel(_maintenanceChannel);
     await androidPlugin?.createNotificationChannel(_alertsChannel);
     await androidPlugin?.createNotificationChannel(_dailyReminderChannel);
@@ -267,6 +316,55 @@ class NotificationService {
     );
   }
 
+  static const int _verificationReminderId = 4802;
+
+  Future<void> scheduleVerificationReminder({
+    required String userName,
+    String? userId,
+  }) async {
+    // Cancel any existing verification reminder for this user
+    final reminderId = userId != null 
+        ? _verificationReminderId + (int.tryParse(userId) ?? 0)
+        : _verificationReminderId;
+    
+    await _localNotifications.cancel(id: reminderId);
+    
+    // Schedule reminder daily at 8 PM (backend can control frequency via FCM)
+    // Note: For exact "every 2 days", backend should send FCM notifications
+    await _localNotifications.periodicallyShow(
+      id: reminderId,
+      title: 'Salamu, $userName',
+      body: 'Unakumbushwa kumaliza usajili wa uthibitishaji kama mwenye nyumba. Piga +255 123 456 789 kwa msaada.',
+      repeatInterval: RepeatInterval.daily,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _verificationReminderChannel.id,
+          _verificationReminderChannel.name,
+          channelDescription: _verificationReminderChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          sound: const RawResourceAndroidNotificationSound('notification_verification_reminder'),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+          sound: 'notification_verification_reminder.mp3',
+          categoryIdentifier: _darwinCategoryVerificationReminder,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: '{"type":"verification_reminder"}',
+    );
+  }
+
+  Future<void> cancelVerificationReminder({String? userId}) async {
+    final reminderId = userId != null 
+        ? _verificationReminderId + (int.tryParse(userId) ?? 0)
+        : _verificationReminderId;
+    await _localNotifications.cancel(id: reminderId);
+  }
+
   Future<String?> syncDeviceToken({String? userId}) async {
     try {
       final token = await FirebaseMessaging.instance.getToken();
@@ -295,6 +393,9 @@ class NotificationService {
     final body = notification?.body ?? message.data['body'] ?? '';
     final type = _notificationTypeFromData(message.data);
 
+    // Play sound based on notification type
+    await _playNotificationSound(type);
+
     await _localNotifications.show(
       id: message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch,
       title: title,
@@ -302,6 +403,42 @@ class NotificationService {
       notificationDetails: _notificationDetailsForType(type),
       payload: jsonEncode(message.data),
     );
+  }
+
+  /// SERK Notification Sounds - Play sound based on notification type
+  Future<void> _playNotificationSound(String type) async {
+    try {
+      switch (type) {
+        case 'payment':
+          await _audioPlayer.play(AssetSource('sounds/notification_payment.mp3'));
+          break;
+        case 'verification':
+          await _audioPlayer.play(AssetSource('sounds/notification_verification.mp3'));
+          break;
+        case 'verification_rejected':
+          await _audioPlayer.play(AssetSource('sounds/notification_verification_rejected.mp3'));
+          break;
+        case 'verification_reminder':
+          await _audioPlayer.play(AssetSource('sounds/notification_verification_reminder.mp3'));
+          break;
+        case 'maintenance':
+          await _audioPlayer.play(AssetSource('sounds/notification_maintenance.mp3'));
+          break;
+        case 'alert':
+          await _audioPlayer.play(AssetSource('sounds/notification_alert.mp3'));
+          break;
+        case 'house':
+          await _audioPlayer.play(AssetSource('sounds/notification_house.mp3'));
+          break;
+        case 'general':
+        default:
+          await _audioPlayer.play(AssetSource('sounds/notification_general.mp3'));
+          break;
+      }
+    } catch (e) {
+      debugPrint('Notification sound error: $e');
+      // Continue without sound if files not available
+    }
   }
 
   String _notificationTypeFromData(Map<String, dynamic> data) {
@@ -317,6 +454,13 @@ class NotificationService {
     if (raw.contains('verify') ||
         raw.contains('verification') ||
         raw.contains('uthibitishaji')) {
+      // Check if it's a rejection
+      if (raw.contains('reject') ||
+          raw.contains('rejected') ||
+          raw.contains('kataliwa') ||
+          raw.contains('failed')) {
+        return 'verification_rejected';
+      }
       return 'verification';
     }
     if (raw.contains('maint') ||
@@ -341,6 +485,10 @@ class NotificationService {
         return _paymentChannel;
       case 'verification':
         return _verificationChannel;
+      case 'verification_rejected':
+        return _verificationRejectedChannel;
+      case 'verification_reminder':
+        return _verificationReminderChannel;
       case 'maintenance':
         return _maintenanceChannel;
       case 'alert':
@@ -357,6 +505,8 @@ class NotificationService {
     final shouldVibrate = type != 'general';
     final actions = _androidActionsForType(type);
     final categoryIdentifier = _darwinCategoryForType(type);
+    final soundPath = _soundPathForType(type);
+    
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channel.id,
@@ -368,6 +518,7 @@ class NotificationService {
             : Priority.defaultPriority,
         icon: '@mipmap/ic_launcher',
         playSound: true,
+        sound: RawResourceAndroidNotificationSound(soundPath),
         enableVibration: shouldVibrate,
         vibrationPattern: shouldVibrate
             ? Int64List.fromList([0, 350, 200, 350])
@@ -379,8 +530,31 @@ class NotificationService {
         presentSound: true,
         presentBadge: true,
         categoryIdentifier: categoryIdentifier,
+        sound: soundPath,
       ),
     );
+  }
+
+  String _soundPathForType(String type) {
+    switch (type) {
+      case 'payment':
+        return 'notification_payment';
+      case 'verification':
+        return 'notification_verification';
+      case 'verification_rejected':
+        return 'notification_verification_rejected';
+      case 'verification_reminder':
+        return 'notification_verification_reminder';
+      case 'maintenance':
+        return 'notification_maintenance';
+      case 'alert':
+        return 'notification_alert';
+      case 'house':
+        return 'notification_house';
+      case 'general':
+      default:
+        return 'notification_general';
+    }
   }
 
   List<AndroidNotificationAction>? _androidActionsForType(String type) {
@@ -416,6 +590,10 @@ class NotificationService {
         return _darwinCategoryPayments;
       case 'verification':
         return _darwinCategoryVerification;
+      case 'verification_rejected':
+        return _darwinCategoryVerificationRejected;
+      case 'verification_reminder':
+        return _darwinCategoryVerificationReminder;
       case 'maintenance':
         return _darwinCategoryMaintenance;
       case 'alert':

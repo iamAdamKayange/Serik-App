@@ -4,6 +4,7 @@ import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/pages/home_page.dart';
 import 'package:serik/pages/register_page.dart';
 import 'package:serik/pages/rental_home_page.dart';
+import 'package:serik/pages/admin_home_screen.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/services/notification_service.dart';
 import 'package:serik/providers/auth_provider.dart';
@@ -142,12 +143,20 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _navigateToHomePage(String role) {
-    if (role == 'landlord' || role == 'admin') {
+    if (role == 'admin') {
+      // Redirect admins to admin dashboard
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
+      );
+    } else if (role == 'landlord') {
+      // Redirect landlords to rental home page
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const RentalHomePage()),
       );
     } else {
+      // Redirect normal users to home page
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomePage()),

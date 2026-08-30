@@ -220,6 +220,331 @@ class ApiService {
     await _storage.delete(key: 'auth_token');
   }
 
+  // ==================== ADMIN ====================
+
+  /// Get admin dashboard data
+  static Future<Map<String, dynamic>?> getAdminDashboard() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/dashboard');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('getAdminDashboard error: $e');
+      return null;
+    }
+  }
+
+  /// Get verification queue
+  static Future<List<dynamic>> getVerificationQueue() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/queue');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getVerificationQueue error: $e');
+      return [];
+    }
+  }
+
+  /// Get recent users
+  static Future<List<dynamic>> getRecentUsers() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/recent');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getRecentUsers error: $e');
+      return [];
+    }
+  }
+
+  /// Approve verification
+  static Future<bool> approveVerification(String userId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/$userId/approve');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('approveVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Reject verification
+  static Future<bool> rejectVerification(String userId, String reason) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/$userId/reject');
+      final headers = await _getHeaders();
+      final body = jsonEncode({'reason': reason});
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: body,
+      ).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('rejectVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Delete user
+  static Future<bool> deleteUser(String userId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/$userId');
+      final headers = await _getHeaders();
+      final response = await http.delete(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('deleteUser error: $e');
+      return false;
+    }
+  }
+
+  /// Delete house (admin only)
+  static Future<bool> deleteAdminHouse(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId');
+      final headers = await _getHeaders();
+      final response = await http.delete(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('deleteAdminHouse error: $e');
+      return false;
+    }
+  }
+
+  /// Get all users (admin only)
+  static Future<List<dynamic>> getAllUsers() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getAllUsers error: $e');
+      return [];
+    }
+  }
+
+  /// Get user details (admin only)
+  static Future<Map<String, dynamic>?> getUserDetails(String userId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/$userId');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('getUserDetails error: $e');
+      return null;
+    }
+  }
+
+  /// Update user (admin only)
+  static Future<bool> updateUser(String userId, Map<String, dynamic> userData) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/$userId');
+      final headers = await _getHeaders();
+      final body = jsonEncode(userData);
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: body,
+      ).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('updateUser error: $e');
+      return false;
+    }
+  }
+
+  /// Ban user (admin only)
+  static Future<bool> banUser(String userId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/$userId/ban');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('banUser error: $e');
+      return false;
+    }
+  }
+
+  /// Unban user (admin only)
+  static Future<bool> unbanUser(String userId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/$userId/unban');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('unbanUser error: $e');
+      return false;
+    }
+  }
+
+  /// Get all houses (admin only)
+  static Future<List<dynamic>> getAllHousesAdmin() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getAllHousesAdmin error: $e');
+      return [];
+    }
+  }
+
+  /// Get house details (admin only)
+  static Future<Map<String, dynamic>?> getHouseDetailsAdmin(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('getHouseDetailsAdmin error: $e');
+      return null;
+    }
+  }
+
+  /// Update house (admin only)
+  static Future<bool> updateAdminHouse(String houseId, Map<String, dynamic> houseData) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId');
+      final headers = await _getHeaders();
+      final body = jsonEncode(houseData);
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: body,
+      ).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('updateHouse error: $e');
+      return false;
+    }
+  }
+
+  /// Get verification details (admin only)
+  static Future<Map<String, dynamic>?> getVerificationDetails(String userId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/$userId');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('getVerificationDetails error: $e');
+      return null;
+    }
+  }
+
+  /// Get new registrations (admin only)
+  static Future<List<dynamic>> getNewRegistrations() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/new');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getNewRegistrations error: $e');
+      return [];
+    }
+  }
+
+  /// Get admin statistics (admin only)
+  static Future<Map<String, dynamic>?> getAdminStatistics() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/statistics');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('getAdminStatistics error: $e');
+      return null;
+    }
+  }
+
+  /// Search users (admin only)
+  static Future<List<dynamic>> searchUsers(String query) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/users/search?q=$query');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('searchUsers error: $e');
+      return [];
+    }
+  }
+
+  /// Search houses (admin only)
+  static Future<List<dynamic>> searchHouses(String query) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/search?q=$query');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('searchHouses error: $e');
+      return [];
+    }
+  }
+
   // ==================== HOUSES ====================
 
   /// Get all houses (public) - Full data with images

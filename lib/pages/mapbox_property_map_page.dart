@@ -3,9 +3,11 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_api/mapbox_api.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
@@ -15,9 +17,12 @@ import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/model/rental_model.dart';
 import 'package:serik/providers/auth_provider.dart';
-import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/services/api_services.dart';
+
+/// SERK Navigation Architecture
+/// Mapbox → Directions API → Route Data → Mapbox Map + TTS Voice
+/// Simple 3-sound system: start, reroute, arrival
 
 const List<Map<String, dynamic>> _universities = [
   {'name': 'UDOM', 'lat': -6.21630, 'lng': 35.7419, 'radius_km': 1.5},
@@ -77,6 +82,20 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   String _nextTurnInstruction = '';
   StreamSubscription<geo.Position>? _positionStreamSubscription;
 
+  // SERK Navigation state
+  bool _isNavigating = false;
+  bool _isVoiceEnabled = true;
+  double _remainingDistance = 0.0;
+  String _currentInstruction = '';
+  String _etaTime = '';
+  int _lastAnnouncedStepIndex = -1;
+  double _lastAnnouncedDistance = 0.0;
+  FlutterTts? _flutterTts;
+  AudioPlayer? _audioPlayer;
+
+  // Simple navigation tracking
+  DateTime? _lastAnnouncementTime;
+
   // Current location marker
   mapbox.PointAnnotation? _currentLocationMarker;
 
@@ -106,6 +125,30 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
   Color get subtextColor => isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
   Color get searchBarBg => isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
+  // Category-based colors for 3D markers
+  Color _getMarkerColorForCategory(String type) {
+    final lowerType = type.toLowerCase();
+
+    // Red for apartments/flats
+    if (lowerType.contains('apartment') || lowerType.contains('flat')) {
+      return const Color(0xFFE53935); // Red
+    }
+    // Blue for shared/bedsitter
+    if (lowerType.contains('shared') || lowerType.contains('bedsitter')) {
+      return const Color(0xFF1E88E5); // Blue
+    }
+    // Green for self-container
+    if (lowerType.contains('self') || lowerType.contains('container')) {
+      return const Color(0xFF43A047); // Green
+    }
+    // Purple for studio
+    if (lowerType.contains('studio')) {
+      return const Color(0xFF8E24AA); // Purple
+    }
+    // Orange for others
+    return const Color(0xFFFB8C00); // Orange
+  }
+
   @override
   void initState() {
     super.initState();
@@ -114,13 +157,85 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     }
     _loadData();
     _determinePosition();
+    _initTts();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _positionStreamSubscription?.cancel();
+    _flutterTts?.stop();
+    _flutterTts = null;
+    _audioPlayer?.dispose();
+    _audioPlayer = null;
     super.dispose();
+  }
+
+  Future<void> _initTts() async {
+    _flutterTts = FlutterTts();
+    _audioPlayer = AudioPlayer();
+
+    try {
+      await _flutterTts?.setLanguage('en-US');
+      await _flutterTts?.setSpeechRate(0.9);
+      await _flutterTts?.setVolume(1.0);
+      await _flutterTts?.setPitch(1.0);
+    } catch (e) {
+      debugPrint('TTS Error: $e');
+    }
+  }
+
+  /// SERK Navigation Sounds - Simple 3-sound system
+  Future<void> _playNavigationSound(String soundType) async {
+    if (_audioPlayer == null) return;
+
+    try {
+      switch (soundType) {
+        case 'navigation_start':
+          await _audioPlayer?.play(AssetSource('sounds/navigation_start.mp3'));
+          break;
+        case 'rerouting':
+          await _audioPlayer?.play(AssetSource('sounds/rerouting.mp3'));
+          break;
+        case 'destination_reached':
+          await _audioPlayer?.play(
+            AssetSource('sounds/destination_reached.mp3'),
+          );
+          break;
+      }
+    } catch (e) {
+      debugPrint('Sound playback error: $e');
+      // Continue without sound if files not available
+    }
+  }
+
+  bool _isGpsPositionValid(geo.Position position) {
+    // Simple GPS validation
+    if (position.accuracy > 50) return false;
+    if (position.latitude.abs() > 90 || position.longitude.abs() > 180)
+      return false;
+    return true;
+  }
+
+  /// SERK Voice Navigation - Simple TTS announcements
+  Future<void> _speak(String text) async {
+    if (!_isVoiceEnabled || _flutterTts == null) return;
+
+    try {
+      // Rate limiting (3 seconds between announcements)
+      if (_lastAnnouncementTime != null) {
+        final timeSinceLast = DateTime.now().difference(_lastAnnouncementTime!);
+        if (timeSinceLast.inSeconds < 3) return;
+      }
+
+      if (!mounted) return;
+
+      await _flutterTts?.stop();
+      await _flutterTts?.speak(text);
+      _lastAnnouncementTime = DateTime.now();
+    } catch (e) {
+      debugPrint('TTS Error: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -244,41 +359,25 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       ..color = const Color(0xFF4285F4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 8;
-    canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      24,
-      outerRingPaint,
-    );
+    canvas.drawCircle(Offset(size / 2, size / 2), 24, outerRingPaint);
 
     // Draw inner circle (white)
     final innerCirclePaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      18,
-      innerCirclePaint,
-    );
+    canvas.drawCircle(Offset(size / 2, size / 2), 18, innerCirclePaint);
 
     // Draw center dot (blue)
     final centerDotPaint = Paint()
       ..color = const Color(0xFF4285F4)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      10,
-      centerDotPaint,
-    );
+    canvas.drawCircle(Offset(size / 2, size / 2), 10, centerDotPaint);
 
     // Draw pointer/shadow below
     final shadowPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.2)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawCircle(
-      Offset(size / 2, size / 2 + 28),
-      8,
-      shadowPaint,
-    );
+    canvas.drawCircle(Offset(size / 2, size / 2 + 28), 8, shadowPaint);
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.toInt(), size.toInt());
@@ -443,47 +542,54 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     final image = await _buildClusterBitmap(
       cluster.spots.length,
       cluster.spots.first.rentPrice,
+      cluster.spots.first.type,
     );
     _iconCache[key] = image;
     return image;
   }
 
-  Future<Uint8List> _buildClusterBitmap(int count, double price) async {
+  Future<Uint8List> _buildClusterBitmap(
+    int count,
+    double price,
+    String type,
+  ) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     const size = 120.0;
     final isCluster = count > 1;
-    final fill = isCluster ? const Color(0xFF0F8B61) : primaryColor;
+    final fill = isCluster
+        ? const Color(0xFF0F8B61)
+        : _getMarkerColorForCategory(type);
 
-    // Google Maps-style pin body (rounded at top, pointed at bottom)
+    // 3D-style pin body (rounded at top, pointed at bottom)
     var pinPath = Path();
     final pinWidth = isCluster ? 50.0 : 44.0;
     final pinHeight = isCluster ? 70.0 : 64.0;
     final pinX = size / 2;
     final pinY = size / 2 - 10;
 
-    // Draw shadow
+    // Draw 3D shadow
     final shadow = Paint()
-      ..color = Colors.black.withValues(alpha: 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      ..color = Colors.black.withValues(alpha: 0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
     canvas.drawPath(
       Path()
-        ..moveTo(pinX - pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
-        ..lineTo(pinX + pinWidth / 2 + 2, pinY - pinHeight / 2 + 2)
+        ..moveTo(pinX - pinWidth / 2 + 3, pinY - pinHeight / 2 + 3)
+        ..lineTo(pinX + pinWidth / 2 + 3, pinY - pinHeight / 2 + 3)
         ..quadraticBezierTo(
-          pinX + pinWidth / 2 + 2,
-          pinY + pinHeight / 2 + 2,
-          pinX + 2,
-          pinY + pinHeight / 2 + 2,
+          pinX + pinWidth / 2 + 3,
+          pinY + pinHeight / 2 + 3,
+          pinX + 3,
+          pinY + pinHeight / 2 + 3,
         )
-        ..lineTo(pinX + 2, pinY + pinHeight + 2)
-        ..lineTo(pinX - 2, pinY + pinHeight + 2)
-        ..lineTo(pinX - 2, pinY + pinHeight / 2 + 2)
+        ..lineTo(pinX + 3, pinY + pinHeight + 3)
+        ..lineTo(pinX - 3, pinY + pinHeight + 3)
+        ..lineTo(pinX - 3, pinY + pinHeight / 2 + 3)
         ..quadraticBezierTo(
-          pinX - pinWidth / 2 + 2,
-          pinY + pinHeight / 2 + 2,
-          pinX - pinWidth / 2 + 2,
-          pinY - pinHeight / 2 + 2,
+          pinX - pinWidth / 2 + 3,
+          pinY + pinHeight / 2 + 3,
+          pinX - pinWidth / 2 + 3,
+          pinY - pinHeight / 2 + 3,
         )
         ..close(),
       shadow,
@@ -512,27 +618,56 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
     canvas.drawPath(pinPath, pinPaint);
 
-    // Draw white border
+    // Draw white border (thicker for 3D effect)
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
+      ..strokeWidth = 4
       ..color = Colors.white;
     canvas.drawPath(pinPath, borderPaint);
 
-    // Draw price/count text
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    final label = isCluster ? '$count' : _formatPrice(price);
+    // Draw inner white circle (like in the image)
+    if (!isCluster) {
+      final innerCirclePaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(pinX, pinY - 5), 14, innerCirclePaint);
 
-    textPainter.text = TextSpan(
-      text: label,
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: isCluster ? 16 : 14,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, Offset((size - textPainter.width) / 2, pinY - 8));
+      // Draw price text inside white circle
+      final textPainter = TextPainter(textDirection: TextDirection.ltr);
+      final label = _formatPrice(price);
+
+      textPainter.text = TextSpan(
+        text: label,
+        style: TextStyle(
+          color: fill,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset((size - textPainter.width) / 2, pinY - 10),
+      );
+    } else {
+      // For clusters, draw count text in white
+      final textPainter = TextPainter(textDirection: TextDirection.ltr);
+      final label = '$count';
+
+      textPainter.text = TextSpan(
+        text: label,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset((size - textPainter.width) / 2, pinY - 8),
+      );
+    }
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.toInt(), size.toInt());
@@ -744,6 +879,158 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
 
   List<RentalSpot> _visibleSpots() => _filterSpots(_spots);
 
+  /// SERK Navigation UI - Clean and simple overlay
+  Widget _buildNavigationOverlay() {
+    return Positioned.fill(
+      child: Column(
+        children: [
+          // Top instruction - Clean Google Maps style
+          SafeArea(
+            child: Container(
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: backgroundColor.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Turn icon
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(_getTurnIcon(), color: primaryColor, size: 28),
+                  ),
+                  const SizedBox(width: 12),
+                  // Instruction
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _formatDistance(_remainingDistance),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                        ),
+                        Text(
+                          _currentInstruction,
+                          style: TextStyle(fontSize: 16, color: textColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ETA
+                  Text(
+                    'ETA: $_etaTime',
+                    style: TextStyle(fontSize: 14, color: subtextColor),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Bottom controls
+          SafeArea(
+            child: Container(
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: backgroundColor.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Exit button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _stopNavigation,
+                      icon: const Icon(Icons.close),
+                      label: Text(context.tr('Sitisha', en: 'Exit')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Voice toggle
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _isVoiceEnabled = !_isVoiceEnabled;
+                      });
+                    },
+                    icon: Icon(
+                      _isVoiceEnabled ? Icons.volume_up : Icons.volume_off,
+                      color: primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getTurnIcon() {
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) {
+      return Icons.location_on;
+    }
+
+    final modifier = _routeSteps[_currentStepIndex].modifier;
+    if (modifier == null) return Icons.arrow_upward;
+
+    switch (modifier) {
+      case NavigationManeuverModifier.LEFT:
+        return Icons.turn_left;
+
+      case NavigationManeuverModifier.RIGHT:
+        return Icons.turn_right;
+
+      case NavigationManeuverModifier.SLIGHT_LEFT:
+        return Icons.turn_slight_left;
+
+      case NavigationManeuverModifier.SLIGHT_RIGHT:
+        return Icons.turn_slight_right;
+
+      case NavigationManeuverModifier.SHARP_LEFT:
+        return Icons.keyboard_double_arrow_left;
+
+      case NavigationManeuverModifier.SHARP_RIGHT:
+        return Icons.keyboard_double_arrow_right;
+
+      case NavigationManeuverModifier.UTURN:
+        return Icons.u_turn_left;
+
+      case NavigationManeuverModifier.STRAIGHT:
+        return Icons.arrow_upward;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visibleCount = _visibleSpots().length;
@@ -761,7 +1048,7 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
           // Map fills entire available space
           Positioned.fill(
             child: mapbox.MapWidget(
-              key: ValueKey('mapbox-property-map-${isDarkMode}'),
+              key: ValueKey('mapbox-property-map-$isDarkMode'),
               cameraOptions: mapbox.CameraOptions(
                 center: mapbox.Point(coordinates: initialCenter),
                 zoom: 12,
@@ -775,6 +1062,9 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
               onTapListener: _handleTap,
             ),
           ),
+
+          // Navigation overlay (when actively navigating)
+          if (_isNavigating) _buildNavigationOverlay(),
           // Floating compact header area
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
@@ -1558,18 +1848,21 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     // This would typically navigate to RentalDetailScreen or similar
   }
 
+  /// SERK Navigation Start - Simple Mapbox Directions API flow
   Future<void> _getDirections(RentalSpot spot) async {
+    // Get current position
     if (_currentPosition == null) {
       await _determinePosition();
       if (_currentPosition == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.tr('Tafadhali wezesha GPS', en: 'Please enable GPS'),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                context.tr('Tafadhali wezesha GPS', en: 'Please enable GPS'),
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
     }
@@ -1577,19 +1870,12 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     setState(() {
       _isGettingDirections = true;
       _selectedPropertyForDirections = spot;
-      _routeDistance = '';
-      _routeDuration = '';
-      _turnByTurnInstructions = [];
-      _routeSteps = [];
-      _currentStepIndex = 0;
-      _nextTurnInstruction = '';
     });
 
     try {
+      // Mapbox Directions API
       final mapboxToken = dotenv.env['MAPBOX_PUBLIC_TOKEN'];
-      if (mapboxToken == null || mapboxToken.isEmpty) {
-        throw Exception('Mapbox token not found');
-      }
+      if (mapboxToken == null) throw Exception('Mapbox token not found');
 
       final mapboxApi = MapboxApi(accessToken: mapboxToken);
 
@@ -1604,39 +1890,26 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         ],
       );
 
-      if (response.error != null) {
-        throw Exception('Directions error: ${response.error}');
-      }
-
-      if (response.routes == null || response.routes!.isEmpty) {
+      if (response.error != null ||
+          response.routes == null ||
+          response.routes!.isEmpty) {
         throw Exception('No route found');
       }
 
       final route = response.routes!.first;
 
-      // Parse distance and duration
+      // Parse route data
       final distance = route.distance ?? 0;
       final duration = route.duration ?? 0;
 
-      setState(() {
-        _routeDistance = _formatDistance(distance);
-        _routeDuration = _formatDuration(duration);
-      });
-
-      // Parse turn-by-turn instructions and route steps for real-time navigation
-      final instructions = <String>[];
+      // Parse turn-by-turn steps
       final steps = <_RouteStep>[];
-
       if (route.legs != null) {
         for (final leg in route.legs!) {
           if (leg.steps != null) {
             for (final step in leg.steps!) {
               if (step.maneuver != null && step.maneuver!.modifier != null) {
                 final instruction = _parseManeuver(step.maneuver!.modifier!);
-                instructions.add(instruction);
-
-                // Store step for real-time navigation
-                // Try to get location from maneuver
                 if (step.maneuver!.location != null &&
                     step.maneuver!.location!.length >= 2) {
                   steps.add(
@@ -1656,21 +1929,29 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       }
 
       setState(() {
-        _turnByTurnInstructions = instructions;
         _routeSteps = steps;
         _currentStepIndex = 0;
-        _nextTurnInstruction = steps.isNotEmpty ? steps[0].instruction : '';
+        _remainingDistance = distance;
+        _etaTime = _calculateETA(duration);
+        _currentInstruction = steps.isNotEmpty
+            ? 'In ${_formatDistance(steps[0].distance)}: ${steps[0].instruction}'
+            : '';
       });
 
-      // Draw the route on the map
+      // Draw route on Mapbox map
       if (route.geometry != null) {
         await _drawRoute(route.geometry!);
       }
 
-      // Start position stream for real-time turn updates
+      // Start GPS tracking
       _startNavigationTracking();
 
-      // Zoom to fit the route
+      // Enable navigation mode
+      setState(() {
+        _isNavigating = true;
+      });
+
+      // Zoom to route
       await _fitRouteToCamera([
         mapbox.Position(
           _currentPosition!.longitude,
@@ -1678,23 +1959,40 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
         ),
         mapbox.Position(spot.longitude, spot.latitude),
       ]);
+
+      // 🔊 Play navigation start sound
+      _playNavigationSound('navigation_start');
+
+      // 🔊 Announce first instruction
+      if (steps.isNotEmpty) {
+        _speak(
+          'Starting navigation. ${steps[0].instruction} in ${_formatDistance(steps[0].distance)}',
+        );
+      }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.tr(
-              'Imeshindika kupata njia: $e',
-              en: 'Failed to get directions: $e',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr(
+                'Imeshindika kupata njia: $e',
+                en: 'Failed to get directions: $e',
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isGettingDirections = false);
       }
     }
+  }
+
+  String _calculateETA(double seconds) {
+    final now = DateTime.now();
+    final arrival = now.add(Duration(seconds: seconds.round()));
+    return '${arrival.hour.toString().padLeft(2, '0')}:${arrival.minute.toString().padLeft(2, '0')}';
   }
 
   String _formatDistance(double meters) {
@@ -1705,17 +2003,11 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     return '${meters.toStringAsFixed(0)} m';
   }
 
-  String _formatDuration(double seconds) {
-    final minutes = (seconds / 60).round();
-    if (minutes >= 60) {
-      final hours = minutes ~/ 60;
-      final remainingMinutes = minutes % 60;
-      return '$hours h $remainingMinutes min';
+  String _parseManeuver(NavigationManeuverModifier? modifier) {
+    if (modifier == null) {
+      return context.tr('Endelea moja kwa moja', en: 'Continue straight');
     }
-    return '$minutes min';
-  }
 
-  String _parseManeuver(NavigationManeuverModifier modifier) {
     switch (modifier) {
       case NavigationManeuverModifier.LEFT:
         return context.tr('Geuka kushoto', en: 'Turn left');
@@ -1734,6 +2026,244 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       case NavigationManeuverModifier.STRAIGHT:
         return context.tr('Endelea moja kwa moja', en: 'Continue straight');
     }
+  }
+
+  /// SERK Navigation Tracking - Simple GPS stream
+  void _startNavigationTracking() {
+    _positionStreamSubscription?.cancel();
+
+    const locationSettings = geo.LocationSettings(
+      accuracy: geo.LocationAccuracy.high,
+      distanceFilter: 5,
+    );
+
+    _positionStreamSubscription =
+        geo.Geolocator.getPositionStream(
+          locationSettings: locationSettings,
+        ).listen(
+          (position) {
+            if (!_isNavigating) return;
+
+            if (!_isGpsPositionValid(position)) return;
+
+            _currentPosition = position;
+            _updateNavigation(position);
+          },
+          onError: (error) {
+            debugPrint('GPS Error: $error');
+          },
+        );
+  }
+
+  /// SERK Navigation Update - Simple turn-by-turn logic
+  void _updateNavigation(geo.Position position) {
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) {
+      _checkArrival(position);
+      return;
+    }
+
+    final currentStep = _routeSteps[_currentStepIndex];
+    final distanceToStep = _distanceKm(
+      position.latitude,
+      position.longitude,
+      currentStep.lat,
+      currentStep.lng,
+    );
+
+    // Update UI
+    setState(() {
+      _remainingDistance = distanceToStep * 1000;
+      _currentInstruction =
+          'In ${_formatDistance(_remainingDistance)}: ${currentStep.instruction}';
+    });
+
+    // Update camera to follow user
+    _updateCameraForNavigation(position);
+
+    // Simple turn announcement (200m, 100m, 50m)
+    final distanceMeters = distanceToStep * 1000;
+    if (_shouldAnnounceTurn(distanceMeters, _currentStepIndex)) {
+      _speak(
+        '${currentStep.instruction} in ${_formatDistance(distanceMeters)}',
+      );
+      _lastAnnouncedStepIndex = _currentStepIndex;
+      _lastAnnouncedDistance = distanceMeters;
+    }
+
+    // Step completion (within 20m - simple threshold)
+    if (distanceToStep < 0.02) {
+      _currentStepIndex++;
+
+      if (_currentStepIndex < _routeSteps.length) {
+        final nextStep = _routeSteps[_currentStepIndex];
+        setState(() {
+          _currentInstruction =
+              'In ${_formatDistance(nextStep.distance)}: ${nextStep.instruction}';
+        });
+        _speak(nextStep.instruction);
+        _lastAnnouncedStepIndex = _currentStepIndex;
+      } else {
+        _checkArrival(position);
+      }
+    }
+
+    // Simple off-route check (100m)
+    if (distanceToStep > 0.1) {
+      _reRoute(position);
+    }
+  }
+
+  Future<void> _updateCameraForNavigation(geo.Position position) async {
+    if (_mapboxMap == null) return;
+
+    await _mapboxMap?.setCamera(
+      mapbox.CameraOptions(
+        center: mapbox.Point(
+          coordinates: mapbox.Position(position.longitude, position.latitude),
+        ),
+        zoom: 16.0,
+        bearing: position.heading,
+        pitch: 45.0,
+      ),
+    );
+  }
+
+  bool _shouldAnnounceTurn(double distance, int stepIndex) {
+    if (_lastAnnouncedStepIndex == stepIndex) {
+      return (distance < _lastAnnouncedDistance - 100) || distance < 50;
+    }
+
+    // Simple announcement points: 200m, 100m, 50m
+    return distance <= 200 || distance <= 100 || distance <= 50;
+  }
+
+  /// SERK Rerouting - Simple route recalculation
+  Future<void> _reRoute(geo.Position position) async {
+    if (_selectedPropertyForDirections == null) return;
+
+    try {
+      final mapboxToken = dotenv.env['MAPBOX_PUBLIC_TOKEN'];
+      if (mapboxToken == null) return;
+
+      final mapboxApi = MapboxApi(accessToken: mapboxToken);
+
+      final response = await mapboxApi.directions.request(
+        profile: NavigationProfile.DRIVING,
+        overview: NavigationOverview.FULL,
+        geometries: NavigationGeometries.POLYLINE6,
+        steps: true,
+        coordinates: [
+          [position.latitude, position.longitude],
+          [
+            _selectedPropertyForDirections!.latitude,
+            _selectedPropertyForDirections!.longitude,
+          ],
+        ],
+      );
+
+      if (response.error != null ||
+          response.routes == null ||
+          response.routes!.isEmpty) {
+        return;
+      }
+
+      final route = response.routes!.first;
+
+      await _clearRoute();
+      if (route.geometry != null) {
+        await _drawRoute(route.geometry!);
+      }
+
+      // Parse steps
+      final steps = <_RouteStep>[];
+      if (route.legs != null) {
+        for (final leg in route.legs!) {
+          if (leg.steps != null) {
+            for (final step in leg.steps!) {
+              if (step.maneuver != null && step.maneuver!.modifier != null) {
+                final instruction = _parseManeuver(step.maneuver!.modifier!);
+                if (step.maneuver!.location != null &&
+                    step.maneuver!.location!.length >= 2) {
+                  steps.add(
+                    _RouteStep(
+                      lat: step.maneuver!.location![1],
+                      lng: step.maneuver!.location![0],
+                      instruction: instruction,
+                      distance: step.distance ?? 0,
+                      modifier: step.maneuver!.modifier,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
+      setState(() {
+        _routeSteps = steps;
+        _currentStepIndex = 0;
+        _remainingDistance = route.distance ?? 0;
+        _lastAnnouncedStepIndex = -1;
+      });
+
+      // Play rerouting sound and announce
+      _playNavigationSound('rerouting');
+      _speak('Recalculating route');
+    } catch (e) {
+      debugPrint('Reroute Error: $e');
+    }
+  }
+
+  /// SERK Arrival Detection - Simple 30m threshold
+  void _checkArrival(geo.Position position) {
+    if (_selectedPropertyForDirections == null) return;
+
+    final distanceToDestination = _distanceKm(
+      position.latitude,
+      position.longitude,
+      _selectedPropertyForDirections!.latitude,
+      _selectedPropertyForDirections!.longitude,
+    );
+
+    if (distanceToDestination < 0.03) {
+      // 30m threshold
+      // Play arrival sound
+      _playNavigationSound('destination_reached');
+
+      // Stop navigation and announce
+      _stopNavigation();
+      _speak('You have arrived at your destination');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('Umefika!', en: 'You have arrived!')),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  /// SERK Navigation Stop - Clean shutdown
+  Future<void> _stopNavigation() async {
+    await _flutterTts?.stop();
+    _positionStreamSubscription?.cancel();
+    await _clearRoute();
+
+    setState(() {
+      _isNavigating = false;
+      _isGettingDirections = false;
+      _selectedPropertyForDirections = null;
+      _routeSteps = [];
+      _currentStepIndex = 0;
+      _currentInstruction = '';
+      _remainingDistance = 0;
+      _etaTime = '';
+      _lastAnnouncedStepIndex = -1;
+      _lastAnnouncementTime = null;
+    });
   }
 
   Future<void> _drawRoute(String encodedPolyline) async {
@@ -1759,18 +2289,42 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
     // Create LineString
     final lineString = mapbox.LineString.fromPoints(points: points);
 
-    // Create polyline annotation
-    final annotation = await manager.create(
+    // Create multi-layer route for better visualization (like Google Maps)
+    // 1. Outer glow/shadow layer for visibility
+    await manager.create(
       mapbox.PolylineAnnotationOptions(
         geometry: lineString,
-        lineColor: const Color(0xFF4CAF50).toARGB32(),
-        lineWidth: 5.0,
-        lineOpacity: 0.8,
+        lineColor: const Color(0xFF4285F4).toARGB32(),
+        lineWidth: 12.0,
+        lineOpacity: 0.3,
+        lineJoin: mapbox.LineJoin.ROUND,
+      ),
+    );
+
+    // 2. Main route line (thick blue)
+    final mainRoute = await manager.create(
+      mapbox.PolylineAnnotationOptions(
+        geometry: lineString,
+        lineColor: const Color(0xFF4285F4).toARGB32(),
+        lineWidth: 8.0,
+        lineOpacity: 1.0,
+        lineJoin: mapbox.LineJoin.ROUND,
+      ),
+    );
+
+    // 3. Inner bright line (lighter blue for road center)
+    await manager.create(
+      mapbox.PolylineAnnotationOptions(
+        geometry: lineString,
+        lineColor: const Color(0xFF64B5F6).toARGB32(),
+        lineWidth: 4.0,
+        lineOpacity: 1.0,
+        lineJoin: mapbox.LineJoin.ROUND,
       ),
     );
 
     setState(() {
-      _routePolyline = annotation;
+      _routePolyline = mainRoute;
     });
   }
 
@@ -1832,64 +2386,6 @@ class _MapboxPropertyMapPageState extends State<MapboxPropertyMapPage> {
       });
     }
   }
-
-  void _startNavigationTracking() {
-    _positionStreamSubscription?.cancel();
-
-    const locationSettings = geo.LocationSettings(
-      accuracy: geo.LocationAccuracy.high,
-      distanceFilter: 10,
-    );
-
-    _positionStreamSubscription =
-        geo.Geolocator.getPositionStream(
-          locationSettings: locationSettings,
-        ).listen(
-          (position) {
-            _currentPosition = position;
-            _updateNextTurnInstruction(position);
-            _updateCurrentLocationMarker(position);
-          },
-          onError: (error) {
-            // Handle location stream errors
-          },
-        );
-  }
-
-  Future<void> _updateCurrentLocationMarker(geo.Position position) async {
-    final manager = _annotationManager;
-    if (manager == null || _currentLocationMarker == null) return;
-
-    // Update marker position
-    // PointAnnotation doesn't have a direct update method for position
-    // So we delete and recreate
-    await manager.delete(_currentLocationMarker!);
-    await _addCurrentLocationMarker(position);
-  }
-
-  void _updateNextTurnInstruction(geo.Position currentPosition) {
-    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
-
-    final currentStep = _routeSteps[_currentStepIndex];
-    final distanceToStep = _distanceKm(
-      currentPosition.latitude,
-      currentPosition.longitude,
-      currentStep.lat,
-      currentStep.lng,
-    );
-
-    // If within 20 meters of the current step, move to next step
-    if (distanceToStep < 0.02) {
-      setState(() {
-        _currentStepIndex++;
-        if (_currentStepIndex < _routeSteps.length) {
-          _nextTurnInstruction = _routeSteps[_currentStepIndex].instruction;
-        } else {
-          _nextTurnInstruction = context.tr('Umefika', en: 'You have arrived');
-        }
-      });
-    }
-  }
 }
 
 class _ClusterBucket {
@@ -1904,7 +2400,7 @@ class _ClusterBucket {
   });
 
   String get cacheKey =>
-      '${lat.toStringAsFixed(4)}:${lng.toStringAsFixed(4)}:${spots.length}';
+      '${lat.toStringAsFixed(4)}:${lng.toStringAsFixed(4)}:${spots.length}:${spots.first.type}';
 }
 
 class _RouteStep {

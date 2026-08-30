@@ -78,6 +78,8 @@ dependencies:
   mapbox_maps_flutter: ^2.27.0
   mapbox_api: ^1.0.0
   polyline_tools: ^0.0.2
+  flutter_tts: ^4.0.2
+  audioplayers: ^6.1.0
 
 
 dev_dependencies:
@@ -107,6 +109,7 @@ flutter:
      - assets/animations/
      - assets/images/
      - assets/region/
+     - assets/sounds/
      - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

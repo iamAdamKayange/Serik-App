@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/services/api_services.dart';
+import 'package:serik/services/notification_service.dart';
 
 class LandlordVerificationPage extends StatefulWidget {
   const LandlordVerificationPage({super.key});
@@ -26,6 +28,35 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
   File? _idPhoto;
   File? _selfie;
   File? _idDocument; // PDF/DOC support
+
+  // NIDA number format validation
+  final RegExp _nidaPattern = RegExp(r'^\d{8}-\d{5}-\d{5}-\d{2}$');
+
+  // Format NIDA number to required format
+  String _formatNidaNumber(String value) {
+    // Remove all non-digit characters
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    
+    // Limit to 20 digits
+    if (digits.length > 20) {
+      return _ninController.text;
+    }
+    
+    // Format as: 19950923-54203-00012-28
+    String formatted = '';
+    for (int i = 0; i < digits.length; i++) {
+      if (i == 8 || i == 13 || i == 18) {
+        formatted += '-';
+      }
+      formatted += digits[i];
+    }
+    
+    return formatted;
+  }
+
+  bool _isValidNidaNumber(String value) {
+    return _nidaPattern.hasMatch(value);
+  }
 
   // Property verification
   File? _propertyDocument;
@@ -77,7 +108,10 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
         final identityStatus = status?['identityStatus'] as String? ?? 'not_submitted';
         final propertyStatus = status?['propertyStatus'] as String? ?? 'not_submitted';
         final canPublish = status?['canPublish'] as bool? ?? false;
+        
+        // Cancel reminder if fully verified
         if (canPublish) {
+          NotificationService.instance.cancelVerificationReminder();
           _currentStep = 'complete';
         } else if (identityStatus != 'verified') {
           _currentStep = 'identity';
@@ -159,6 +193,17 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
       return;
     }
 
+    // Validate NIDA number format
+    if (!_isValidNidaNumber(_ninController.text)) {
+      _showErrorSnackBar(
+        context.tr(
+          'Nambari ya NIDA lazima iwe 20 digits kwa format: 19950923-54203-00012-28',
+          en: 'NIDA number must be 20 digits in format: 19950923-54203-00012-28',
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
       await ApiService.submitIdentityVerification(
@@ -174,6 +219,12 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
           en: 'Identity verification submitted',
         ),
       );
+      
+      // Schedule verification reminder every 2 days
+      await NotificationService.instance.scheduleVerificationReminder(
+        userName: _fullNameController.text,
+      );
+      
       setState(() => _currentStep = 'property');
       await _loadVerificationStatus();
     } catch (e) {
@@ -1037,11 +1088,31 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
           TextField(
             controller: _ninController,
             style: GoogleFonts.poppins(color: textColor),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(20),
+            ],
+            onChanged: (value) {
+              final formatted = _formatNidaNumber(value);
+              if (formatted != value) {
+                _ninController.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              }
+            },
             decoration: InputDecoration(
               labelText: isSwahili
-                  ? 'Nambari ya NIN/Kitambulisho'
-                  : 'NIN/ID Number',
+                  ? 'Nambari ya NIDA (20 digits)'
+                  : 'NIDA Number (20 digits)',
               labelStyle: GoogleFonts.poppins(color: subtextColor),
+              hintText: '19950923-54203-00012-28',
+              hintStyle: GoogleFonts.poppins(color: subtextColor.withValues(alpha: 0.5)),
+              helperText: isSwahili
+                  ? 'Format: 19950923-54203-00012-28'
+                  : 'Format: 19950923-54203-00012-28',
+              helperStyle: GoogleFonts.poppins(color: subtextColor, fontSize: 11),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
@@ -1061,6 +1132,10 @@ class _LandlordVerificationPageState extends State<LandlordVerificationPage>
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(color: primaryColor, width: 2),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Colors.red, width: 2),
               ),
               prefixIcon: Icon(Icons.numbers, color: subtextColor),
               filled: true,

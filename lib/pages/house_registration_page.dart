@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/pages/login_page.dart';
+import 'package:serik/pages/landlord_verification_page.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/widgets/advanced_location_picker.dart';
 import 'package:serik/widgets/mapbox_location_picker.dart';
@@ -2120,6 +2121,65 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     );
   }
 
+  void _showVerificationReminder() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFFFF9800),
+        duration: const Duration(seconds: 5),
+        content: Row(
+          children: [
+            const Icon(Icons.verified_user_outlined, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr(
+                      "Bado hujaverified! Tafadhali jithibitishe ili kuweka nyumba.",
+                      en: "Not verified yet! Please verify yourself to list houses.",
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    context.tr(
+                      "Piga +255 123 456 789 kwa msaada wa verification",
+                      en: "Call +255 123 456 789 for verification assistance",
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: context.tr("Jithibitishe", en: "Verify"),
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LandlordVerificationPage()),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   // ==================== VIDEO THUMBNAIL GENERATION ====================
 
   /// Generate thumbnails for all selected videos
@@ -2267,6 +2327,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         try {
           final verificationStatus = await ApiService.getVerificationStatus();
           if (verificationStatus != null && verificationStatus['canPublish'] != true) {
+            _showVerificationReminder();
             _showFeedback(
               context.tr(
                 "Lazima uwe verified kama mwenye nyumba kabla ya kuweka nyumba.",
