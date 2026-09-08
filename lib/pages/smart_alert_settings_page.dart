@@ -4,7 +4,6 @@ import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/providers/auth_provider.dart';
 import 'package:serik/services/api_services.dart';
-import 'package:serik/services/notification_service.dart';
 
 class SmartAlertSettingsPage extends StatefulWidget {
   const SmartAlertSettingsPage({super.key});
@@ -27,11 +26,11 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
   final _minRentController = TextEditingController();
   final _maxRentController = TextEditingController();
 
-  String? _token;
   bool _enabled = false;
   bool _loading = true;
   bool _saving = false;
   final Set<String> _selectedTypes = {};
+  String? _token;
 
   @override
   void initState() {
@@ -56,21 +55,11 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
       return;
     }
 
-    final token = await NotificationService.instance.syncDeviceToken(
-      userId: authProvider.userId,
-    );
-    if (!mounted) return;
-    if (token == null) {
-      setState(() {
-        _loading = false;
-      });
-      return;
-    }
+    _token = await ApiService.getToken();
 
-    final prefs = await ApiService.getSmartAlertPreferences(token: token);
+    final prefs = await ApiService.getSmartAlertPreferences();
     if (!mounted) return;
     setState(() {
-      _token = token;
       _enabled = prefs?['enabled'] == true;
       _regionsController.text = _joinList(prefs?['regions']);
       _districtsController.text = _joinList(prefs?['districts']);
@@ -85,12 +74,10 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
 
   Future<void> _save() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final token = _token;
-    if (!authProvider.isLoggedIn || token == null || _saving) return;
+    if (!authProvider.isLoggedIn || _saving) return;
 
     setState(() => _saving = true);
     final ok = await ApiService.saveSmartAlertPreferences(
-      token: token,
       enabled: _enabled,
       regions: _splitList(_regionsController.text),
       districts: _splitList(_districtsController.text),
@@ -157,108 +144,108 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : !isLoggedIn
-              ? _LoginRequiredState(colors: colors)
-              : _token == null
-              ? _MissingTokenState(colors: colors)
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          ? _LoginRequiredState(colors: colors)
+          : _token == null
+          ? _MissingTokenState(colors: colors)
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              children: [
+                SwitchListTile(
+                  value: _enabled,
+                  onChanged: (value) => setState(() => _enabled = value),
+                  title: Text(
+                    l10n.tr(
+                      'Pokea alert za nyumba zinazokufaa',
+                      en: 'Receive alerts for matching houses',
+                    ),
+                  ),
+                  subtitle: Text(
+                    l10n.tr(
+                      'Tutakutumia notification nyumba mpya ikilingana na vigezo hivi.',
+                      en: 'We will notify you when a new house matches these filters.',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _TextSection(
+                  controller: _regionsController,
+                  label: l10n.tr('Mikoa', en: 'Regions'),
+                  hint: 'Dar es Salaam, Dodoma',
+                  icon: Icons.map_outlined,
+                ),
+                const SizedBox(height: 12),
+                _TextSection(
+                  controller: _districtsController,
+                  label: l10n.tr('Wilaya', en: 'Districts'),
+                  hint: 'Kinondoni, Ilala',
+                  icon: Icons.location_city_outlined,
+                ),
+                const SizedBox(height: 12),
+                Row(
                   children: [
-                    SwitchListTile(
-                      value: _enabled,
-                      onChanged: (value) => setState(() => _enabled = value),
-                      title: Text(
-                        l10n.tr(
-                          'Pokea alert za nyumba zinazokufaa',
-                          en: 'Receive alerts for matching houses',
-                        ),
-                      ),
-                      subtitle: Text(
-                        l10n.tr(
-                          'Tutakutumia notification nyumba mpya ikilingana na vigezo hivi.',
-                          en: 'We will notify you when a new house matches these filters.',
-                        ),
+                    Expanded(
+                      child: _TextSection(
+                        controller: _minRentController,
+                        label: l10n.tr('Bei ya chini', en: 'Min rent'),
+                        hint: '50000',
+                        icon: Icons.price_check_rounded,
+                        keyboardType: TextInputType.number,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _TextSection(
-                      controller: _regionsController,
-                      label: l10n.tr('Mikoa', en: 'Regions'),
-                      hint: 'Dar es Salaam, Dodoma',
-                      icon: Icons.map_outlined,
-                    ),
-                    const SizedBox(height: 12),
-                    _TextSection(
-                      controller: _districtsController,
-                      label: l10n.tr('Wilaya', en: 'Districts'),
-                      hint: 'Kinondoni, Ilala',
-                      icon: Icons.location_city_outlined,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _TextSection(
-                            controller: _minRentController,
-                            label: l10n.tr('Bei ya chini', en: 'Min rent'),
-                            hint: '50000',
-                            icon: Icons.price_check_rounded,
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _TextSection(
-                            controller: _maxRentController,
-                            label: l10n.tr('Bei ya juu', en: 'Max rent'),
-                            hint: '250000',
-                            icon: Icons.payments_outlined,
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      l10n.tr('Aina ya nyumba', en: 'House type'),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _houseTypes.map((type) {
-                        final selected = _selectedTypes.contains(type);
-                        return FilterChip(
-                          selected: selected,
-                          label: Text(type),
-                          onSelected: (value) {
-                            setState(() {
-                              if (value) {
-                                _selectedTypes.add(type);
-                              } else {
-                                _selectedTypes.remove(type);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      l10n.tr(
-                        'Ukiiacha sehemu tupu, haitatumika kuchuja matokeo.',
-                        en: 'Empty fields are ignored when matching houses.',
-                      ),
-                      style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontSize: 12,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _TextSection(
+                        controller: _maxRentController,
+                        label: l10n.tr('Bei ya juu', en: 'Max rent'),
+                        hint: '250000',
+                        icon: Icons.payments_outlined,
+                        keyboardType: TextInputType.number,
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 18),
+                Text(
+                  l10n.tr('Aina ya nyumba', en: 'House type'),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _houseTypes.map((type) {
+                    final selected = _selectedTypes.contains(type);
+                    return FilterChip(
+                      selected: selected,
+                      label: Text(type),
+                      onSelected: (value) {
+                        setState(() {
+                          if (value) {
+                            _selectedTypes.add(type);
+                          } else {
+                            _selectedTypes.remove(type);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  l10n.tr(
+                    'Ukiiacha sehemu tupu, haitatumika kuchuja matokeo.',
+                    en: 'Empty fields are ignored when matching houses.',
+                  ),
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -278,11 +265,7 @@ class _LoginRequiredState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              size: 54,
-              color: colors.primary,
-            ),
+            Icon(Icons.lock_outline_rounded, size: 54, color: colors.primary),
             const SizedBox(height: 12),
             Text(
               l10n.tr(

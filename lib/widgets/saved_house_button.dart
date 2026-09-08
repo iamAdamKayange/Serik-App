@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:serik/services/api_services.dart';
-import 'package:serik/services/notification_service.dart';
 
 class SavedHouseButton extends StatefulWidget {
   const SavedHouseButton({super.key, required this.houseId});
@@ -12,10 +11,10 @@ class SavedHouseButton extends StatefulWidget {
 }
 
 class _SavedHouseButtonState extends State<SavedHouseButton> {
-  String? _token;
   bool _saved = false;
   bool _loading = true;
   bool _busy = false;
+  String? _token;
 
   @override
   void initState() {
@@ -24,39 +23,22 @@ class _SavedHouseButtonState extends State<SavedHouseButton> {
   }
 
   Future<void> _load() async {
-    final token = await NotificationService.instance.getDeviceToken();
-    if (!mounted) return;
-    if (token == null) {
-      setState(() => _loading = false);
-      return;
-    }
-
-    final saved = await ApiService.isHouseSaved(
-      token: token,
-      houseId: widget.houseId,
-    );
+    _token = await ApiService.getToken();
+    final saved = await ApiService.isHouseSaved(houseId: widget.houseId);
     if (!mounted) return;
     setState(() {
-      _token = token;
       _saved = saved;
       _loading = false;
     });
   }
 
   Future<void> _toggle() async {
-    final token = _token;
-    if (token == null || _busy) return;
+    if (_busy) return;
 
     setState(() => _busy = true);
     final ok = _saved
-        ? await ApiService.removeSavedHouse(
-            token: token,
-            houseId: widget.houseId,
-          )
-        : await ApiService.saveHouseForAlerts(
-            token: token,
-            houseId: widget.houseId,
-          );
+        ? await ApiService.removeSavedHouse(houseId: widget.houseId)
+        : await ApiService.saveHouseForAlerts(houseId: widget.houseId);
 
     if (!mounted) return;
     setState(() {

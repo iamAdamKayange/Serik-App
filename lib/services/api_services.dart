@@ -12,12 +12,13 @@ import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:serik/services/realtime_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiService {
   static String get baseUrl {
-    // Use environment variable or fallback to production URL
-    const envBaseUrl = String.fromEnvironment('API_BASE_URL');
-    return envBaseUrl.isNotEmpty ? envBaseUrl : 'https://serkapp-backend.onrender.com';
+    // Use environment variable from .env file or fallback to production URL
+    final envBaseUrl = dotenv.env['API_BASE_URL'];
+    return envBaseUrl?.isNotEmpty == true ? envBaseUrl! : 'https://serkapp-backend.onrender.com';
   }
   
   static const String apiPrefix = '/api';
@@ -242,7 +243,7 @@ class ApiService {
   /// Get verification queue
   static Future<List<dynamic>> getVerificationQueue() async {
     try {
-      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/queue');
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verifications/queue');
       final headers = await _getHeaders();
       final response = await http.get(url, headers: headers).timeout(timeout);
       if (response.statusCode == 200) {
@@ -274,9 +275,9 @@ class ApiService {
   }
 
   /// Approve verification
-  static Future<bool> approveVerification(String userId) async {
+  static Future<bool> approveVerification(String verificationId) async {
     try {
-      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/$userId/approve');
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verifications/$verificationId/approve');
       final headers = await _getHeaders();
       final response = await http.post(url, headers: headers).timeout(timeout);
       return response.statusCode == 200;
@@ -287,9 +288,9 @@ class ApiService {
   }
 
   /// Reject verification
-  static Future<bool> rejectVerification(String userId, String reason) async {
+  static Future<bool> rejectVerification(String verificationId, String reason) async {
     try {
-      final url = Uri.parse('$baseUrl$apiPrefix/admin/verification/$userId/reject');
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/verifications/$verificationId/reject');
       final headers = await _getHeaders();
       final body = jsonEncode({'reason': reason});
       final response = await http.post(
@@ -508,6 +509,74 @@ class ApiService {
     } catch (e) {
       debugPrint('getAdminStatistics error: $e');
       return null;
+    }
+  }
+
+  /// Get admin KPI cards and highlights
+  static Future<List<dynamic>> getAdminKpiData() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/dashboard/kpi');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getAdminKpiData error: $e');
+      return [];
+    }
+  }
+
+  /// Get recent admin activity stream
+  static Future<Map<String, dynamic>> getRecentActivity() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/activity/recent');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as Map<String, dynamic>;
+      }
+      return {'users': [], 'houses': [], 'verifications': []};
+    } catch (e) {
+      debugPrint('getRecentActivity error: $e');
+      return {'users': [], 'houses': [], 'verifications': []};
+    }
+  }
+
+  /// Get user growth trend for analytics
+  static Future<List<dynamic>> getUserGrowth() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/dashboard/user-growth');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getUserGrowth error: $e');
+      return [];
+    }
+  }
+
+  /// Get revenue trend for analytics
+  static Future<List<dynamic>> getRevenueTrends() async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/dashboard/revenue-trends');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getRevenueTrends error: $e');
+      return [];
     }
   }
 
@@ -793,7 +862,7 @@ class ApiService {
       }
       
       final url = Uri.parse(
-        '$baseUrl$apiPrefix/notifications/$notificationId/read?token=${Uri.encodeQueryComponent(fcmToken)}',
+        '$baseUrl$apiPrefix/notifications/$notificationId/read',
       );
       final response = await http.put(url, headers: headers).timeout(timeout);
       if (response.statusCode == 200) {
@@ -837,6 +906,8 @@ class ApiService {
     }
   }
 
+  // Device token registration is now handled automatically during authentication
+  // This function is kept for compatibility but no longer makes API calls
   static Future<void> registerDeviceToken({
     required String token,
     required String platform,
@@ -844,35 +915,18 @@ class ApiService {
     String? userId,
     String? installCutoffAt,
   }) async {
-    try {
-      final url = Uri.parse('$baseUrl$apiPrefix/notifications/devices');
-      final body = <String, dynamic>{
-        'token': token,
-        'platform': platform,
-      };
-      if (appVersion != null) body['appVersion'] = appVersion;
-      if (userId != null) body['userId'] = userId;
-      if (installCutoffAt != null) body['installCutoffAt'] = installCutoffAt;
-
-      await http
-          .post(
-            url,
-            headers: await _getHeaders(),
-            body: jsonEncode(body),
-          )
-          .timeout(timeout);
-    } catch (e) {
-      debugPrint('registerDeviceToken error: $e');
-    }
+    // Device token registration is now handled server-side during authentication
+    // No API call needed as the endpoint has been removed for security reasons
+    debugPrint('Device token registration handled server-side');
   }
 
-  static Future<Map<String, dynamic>?> getSmartAlertPreferences({
-    required String token,
-  }) async {
-    final cacheKey = _smartAlertPrefsCacheKey(token);
+  static Future<Map<String, dynamic>?> getSmartAlertPreferences() async {
     try {
+      final token = await _storage.read(key: 'auth_token');
+      final cacheKey = _smartAlertPrefsCacheKey(token ?? '');
+      
       final url = Uri.parse(
-        '$baseUrl$apiPrefix/notifications/preferences?token=${Uri.encodeQueryComponent(token)}',
+        '$baseUrl$apiPrefix/notifications/preferences',
       );
       final response = await http
           .get(url, headers: await _getHeaders())
@@ -886,12 +940,11 @@ class ApiService {
       return await _readMapCache(cacheKey);
     } catch (e) {
       debugPrint('getSmartAlertPreferences error: $e');
-      return await _readMapCache(cacheKey);
+      return null;
     }
   }
 
   static Future<bool> saveSmartAlertPreferences({
-    required String token,
     required bool enabled,
     required List<String> regions,
     required List<String> districts,
@@ -902,7 +955,6 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl$apiPrefix/notifications/preferences');
       final body = <String, dynamic>{
-        'token': token,
         'enabled': enabled,
         'regions': regions,
         'districts': districts,
@@ -920,7 +972,10 @@ class ApiService {
           .timeout(timeout);
       final ok = response.statusCode == 200;
       if (ok) {
-        await _writeMapCache(_smartAlertPrefsCacheKey(token), body);
+        // Cache updated preferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('smart_alerts_enabled', enabled);
+        final token = await _storage.read(key: 'auth_token');
         RealtimeService.instance.emit('notification:changed', {
           'action': 'preferences_updated',
           'token': token,
@@ -934,14 +989,13 @@ class ApiService {
   }
 
   static Future<bool> isHouseSaved({
-    required String token,
     required String houseId,
   }) async {
     try {
       final url = Uri.parse(
-        '$baseUrl$apiPrefix/notifications/saved-houses/$houseId?token=${Uri.encodeQueryComponent(token)}',
+        '$baseUrl$apiPrefix/notifications/saved-houses/$houseId',
       );
-      final response = await http.get(url).timeout(timeout);
+      final response = await http.get(url, headers: await _getHeaders()).timeout(timeout);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['saved'] == true;
@@ -954,7 +1008,6 @@ class ApiService {
   }
 
   static Future<bool> saveHouseForAlerts({
-    required String token,
     required String houseId,
   }) async {
     try {
@@ -962,8 +1015,8 @@ class ApiService {
       final response = await http
           .post(
             url,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'token': token, 'houseId': houseId}),
+            headers: await _getHeaders(),
+            body: jsonEncode({'houseId': houseId}),
           )
           .timeout(timeout);
       return response.statusCode == 201 || response.statusCode == 200;
@@ -974,14 +1027,13 @@ class ApiService {
   }
 
   static Future<bool> removeSavedHouse({
-    required String token,
     required String houseId,
   }) async {
     try {
       final url = Uri.parse(
-        '$baseUrl$apiPrefix/notifications/saved-houses/$houseId?token=${Uri.encodeQueryComponent(token)}',
+        '$baseUrl$apiPrefix/notifications/saved-houses/$houseId',
       );
-      final response = await http.delete(url).timeout(timeout);
+      final response = await http.delete(url, headers: await _getHeaders()).timeout(timeout);
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('removeSavedHouse error: $e');
@@ -1276,7 +1328,7 @@ class ApiService {
               'videoId': videoId,
               'houseId': houseId,
               'content': content,
-              'parentId': ?parentId,
+              if (parentId != null) 'parentId': parentId,
             }),
           )
           .timeout(timeout);
@@ -1541,6 +1593,112 @@ class ApiService {
       return response.statusCode == 201;
     } catch (e) {
       debugPrint('❌ submitPropertyVerification error: $e');
+      return false;
+    }
+  }
+
+  /// Submit complete verification (identity + property as single application)
+  static Future<bool> submitCompleteVerification({
+    required String fullName,
+    required String ninNumber,
+    required File idPhoto,
+    required File selfie,
+    File? idDocument,
+    required File propertyDocument,
+    required List<File> propertyPhotos,
+    required String address,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/verification/complete');
+      final headers = await _getHeaders();
+
+      // Remove Content-Type from headers to let http package set it with boundary
+      final requestHeaders = Map<String, String>.from(headers);
+      requestHeaders.remove('Content-Type');
+
+      // Create multipart request
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(requestHeaders);
+
+      // Add identity form fields
+      request.fields['fullName'] = fullName;
+      request.fields['ninNumber'] = ninNumber;
+
+      // Add identity photos
+      final idPhotoBytes = await idPhoto.readAsBytes();
+      final idPhotoMime = lookupMimeType(idPhoto.path) ?? 'image/jpeg';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'idPhoto',
+          idPhotoBytes,
+          filename: path.basename(idPhoto.path),
+          contentType: MediaType.parse(idPhotoMime),
+        ),
+      );
+
+      final selfieBytes = await selfie.readAsBytes();
+      final selfieMime = lookupMimeType(selfie.path) ?? 'image/jpeg';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'selfie',
+          selfieBytes,
+          filename: path.basename(selfie.path),
+          contentType: MediaType.parse(selfieMime),
+        ),
+      );
+
+      // Add optional ID document
+      if (idDocument != null) {
+        final docBytes = await idDocument.readAsBytes();
+        final docMime = lookupMimeType(idDocument.path) ?? 'application/pdf';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'idDocument',
+            docBytes,
+            filename: path.basename(idDocument.path),
+            contentType: MediaType.parse(docMime),
+          ),
+        );
+      }
+
+      // Add property form fields
+      request.fields['address'] = address;
+      if (latitude != null) request.fields['latitude'] = latitude.toString();
+      if (longitude != null) request.fields['longitude'] = longitude.toString();
+
+      // Add property document
+      final propertyDocBytes = await propertyDocument.readAsBytes();
+      final propertyDocMime = lookupMimeType(propertyDocument.path) ?? 'application/pdf';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'propertyDocument',
+          propertyDocBytes,
+          filename: path.basename(propertyDocument.path),
+          contentType: MediaType.parse(propertyDocMime),
+        ),
+      );
+
+      // Add property photos
+      for (int i = 0; i < propertyPhotos.length; i++) {
+        final photoBytes = await propertyPhotos[i].readAsBytes();
+        final photoMime = lookupMimeType(propertyPhotos[i].path) ?? 'image/jpeg';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'propertyPhotos',
+            photoBytes,
+            filename: path.basename(propertyPhotos[i].path),
+            contentType: MediaType.parse(photoMime),
+          ),
+        );
+      }
+
+      final response = await request.send().timeout(timeout);
+
+      return response.statusCode == 201;
+    } catch (e) {
+      debugPrint('❌ submitCompleteVerification error: $e');
       return false;
     }
   }

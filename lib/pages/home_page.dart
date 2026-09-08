@@ -651,26 +651,27 @@ class _HomePageState extends State<HomePage>
 
     return CustomScrollView(
       slivers: [
-        // Top Brand Header
+        // Modern AppBar
         SliverAppBar(
           floating: true,
           pinned: false,
           backgroundColor: cardBg,
           elevation: 0,
+          toolbarHeight: 60,
           title: Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [primaryColor, const Color(0xFF1B5E20)],
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
                       color: primaryColor.withValues(alpha: 0.3),
-                      blurRadius: 8,
+                      blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -684,47 +685,50 @@ class _HomePageState extends State<HomePage>
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'SERIK',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'SERIK',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
+                      ),
                     ),
-                  ),
-                  Text(
-                    authProvider.isLoggedIn
+                    Text(
+                      authProvider.isLoggedIn
                         ? 'Habari, ${authProvider.userName ?? "Mpangaji"}'
                         : 'Pata Makazi Yako Salama',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: subtextColor,
-                      fontWeight: FontWeight.w500,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: subtextColor,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
           actions: [
-            // Video Feed Shortcut
+            // Video Feed
             IconButton(
               icon: Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  color: primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   Icons.play_circle_filled_rounded,
                   color: primaryColor,
-                  size: 20,
+                  size: 18,
                 ),
               ),
-              tooltip: 'Tazama Video za Nyumba',
+              tooltip: 'Video za Nyumba',
               onPressed: () {
                 Navigator.push(
                   context,
@@ -734,17 +738,17 @@ class _HomePageState extends State<HomePage>
                 );
               },
             ),
-            // Notifications Icon
+            // Notifications
             IconButton(
               icon: Stack(
                 children: [
-                  Icon(Icons.notifications_outlined, color: textColor),
+                  Icon(Icons.notifications_outlined, color: textColor, size: 20),
                   Positioned(
                     right: 0,
                     top: 0,
                     child: Container(
-                      width: 8,
-                      height: 8,
+                      width: 6,
+                      height: 6,
                       decoration: const BoxDecoration(
                         color: Color(0xFFEF4444),
                         shape: BoxShape.circle,
@@ -1681,11 +1685,12 @@ class _HomePageState extends State<HomePage>
       appBar: AppBar(
         backgroundColor: cardBg,
         elevation: 0,
+        toolbarHeight: 60,
         title: Text(
-          'Gundua Nyumba (Properties)',
+          'Gundua Nyumba',
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
             color: textColor,
           ),
         ),
@@ -1740,11 +1745,12 @@ class _HomePageState extends State<HomePage>
       appBar: AppBar(
         backgroundColor: cardBg,
         elevation: 0,
+        toolbarHeight: 60,
         title: Text(
           'Akaunti & Mipangilio',
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
             color: textColor,
           ),
         ),
