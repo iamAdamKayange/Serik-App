@@ -18,7 +18,14 @@ class GoogleMapsRoutingService {
   String? _apiKey;
 
   GoogleMapsRoutingService() {
+    // Try to load from environment variable first
     _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'];
+    
+    // If not found, use the same key as configured in AndroidManifest.xml
+    // This is a fallback for development/production where the API key is already configured
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      _apiKey = 'AIzaSyCcyVSvRgnLL09Po6Y7IfyPoJq5vAUCEOU';
+    }
   }
 
   /// Check if routing service is available
