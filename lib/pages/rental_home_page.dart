@@ -9,8 +9,8 @@ import 'package:serik/pages/admin_map_page.dart';
 import 'package:serik/pages/app_settings_page.dart';
 import 'package:serik/pages/home_page.dart';
 import 'package:serik/pages/house_registration_page.dart';
-import 'package:serik/pages/houses_page.dart';
 import 'package:serik/pages/landlord_verification_page.dart';
+import 'package:serik/pages/landlord_houses_page.dart';
 import 'package:serik/pages/notification_screen.dart';
 import 'package:serik/pages/profile_edit_page.dart';
 import 'package:serik/services/api_services.dart';
@@ -1357,16 +1357,16 @@ class _RentalHomePageState extends State<RentalHomePage>
   ) {
     final items = [
       _SI(
-        label: context.tr('Nyumba', en: 'Properties'),
+        label: context.tr('Nyumba Zangu', en: 'My Houses'),
         value: '${houses.length}',
         icon: Icons.home_work_rounded,
         color: primary,
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => HousesPage(houses: houses, onRefresh: _refreshData),
+            builder: (_) => const LandlordHousesPage(),
           ),
-        ),
+        ).then((_) => _refreshData()),
       ),
       _SI(
         label: context.tr('Imekodishwa', en: 'Occupied'),

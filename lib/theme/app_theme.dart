@@ -55,9 +55,14 @@ class AppTheme {
   static const double spacing10 = 10.0;
   static const double spacing12 = 12.0;
   static const double spacing16 = 16.0;
+  static const double spacing18 = 18.0;
   static const double spacing20 = 20.0;
   static const double spacing24 = 24.0;
   static const double spacing32 = 32.0;
+  static const double spacing40 = 40.0;
+  static const double spacing48 = 48.0;
+  static const double spacing64 = 64.0;
+  static const double spacing80 = 80.0;
 
   // ============================================================
   // BORDER RADIUS SYSTEM
@@ -92,7 +97,6 @@ class AppTheme {
     brightness: Brightness.light,
     primary: lightPrimary,
     secondary: lightSecondary,
-    background: lightBackground,
     surface: lightSurface,
     onSurface: lightText,
     outline: const Color(0xFFE2E8E5),
@@ -107,7 +111,6 @@ class AppTheme {
     brightness: Brightness.dark,
     primary: darkPrimary,
     secondary: darkSecondary,
-    background: darkBackground,
     surface: darkSurface,
     onSurface: darkText,
     outline: const Color(0xFF26312D),
@@ -122,7 +125,6 @@ class AppTheme {
     required Brightness brightness,
     required Color primary,
     required Color secondary,
-    required Color background,
     required Color surface,
     required Color onSurface,
     required Color outline,
@@ -136,7 +138,7 @@ class AppTheme {
       brightness: brightness,
 
       // Background
-      scaffoldBackgroundColor: background,
+      scaffoldBackgroundColor: surface,
       cardColor: surface,
 
       // Typography

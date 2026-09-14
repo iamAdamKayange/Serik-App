@@ -78,6 +78,8 @@ class _LoginPageState extends State<LoginPage> {
         String? phone = result['phone'];
         String? avatarUrl = result['profileImageUrl']?.toString() ??
             result['profile_image_url']?.toString();
+        String? preferredLanguage = result['preferredLanguage']?.toString() ??
+            result['preferred_language']?.toString();
 
         authProvider.login(
           userId: userId,
@@ -87,7 +89,15 @@ class _LoginPageState extends State<LoginPage> {
           token: result['token'],
           phone: phone,
           avatarUrl: avatarUrl,
+          preferredLanguage: preferredLanguage,
         );
+        
+        // Sync language preference from backend
+        if (preferredLanguage != null) {
+          final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+          await themeProvider.setLocale(Locale(preferredLanguage));
+        }
+        
         await NotificationService.instance.syncDeviceToken(userId: userId);
 
         debugPrint('✅ User logged in: $fullName');
@@ -105,6 +115,10 @@ class _LoginPageState extends State<LoginPage> {
 
         if (mounted) {
           if (widget.redirectTo == 'details' && widget.spotId != null) {
+            // After login, go back to the previous screen (map)
+            Navigator.pop(context, true);
+          } else if (widget.redirectTo == 'directions' && widget.spotId != null) {
+            // After login, go back to the previous screen (map)
             Navigator.pop(context, true);
           } else if (widget.redirectTo == 'verification') {
             Navigator.pop(context, true);

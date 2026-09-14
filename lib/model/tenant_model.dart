@@ -5,7 +5,7 @@ class TenantData {
   final String houseId;
   final String houseName;
   final double rentAmount;
-  final DateTime startDate;
+  final DateTime? startDate;
   final DateTime? endDate;
   final String status;
 
@@ -16,7 +16,7 @@ class TenantData {
     required this.houseId,
     required this.houseName,
     required this.rentAmount,
-    required this.startDate,
+    this.startDate,
     this.endDate,
     required this.status,
   });

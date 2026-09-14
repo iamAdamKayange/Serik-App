@@ -196,7 +196,7 @@ class HouseData {
     return 0;
   }
 
-  /// Salama kubadilisha value kuwa List<String>
+  /// Salama kubadilisha value kuwa List&lt;String&gt;
   static List<String> _parseList(dynamic data) {
     if (data == null) return [];
     if (data is List) return data.map((e) => e.toString()).toList();

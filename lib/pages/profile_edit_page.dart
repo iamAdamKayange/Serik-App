@@ -144,9 +144,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
+          : RefreshIndicator(
+              onRefresh: _loadProfile,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -363,6 +365,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                   ),
               ],
             ),
+          ),
     );
   }
 }

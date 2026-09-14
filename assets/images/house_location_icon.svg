@@ -1,0 +1,14 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Red Location Pin Icon -->
+  <defs>
+    <linearGradient id="pinGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#DC2626"/>
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <path d="M24 4C14.4 4 6.5 12.3 6.5 22C6.5 30.5 24 46 24 46C24 46 41.5 30.5 41.5 22C41.5 12.3 33.6 4 24 4Z" fill="url(#pinGradient)" filter="url(#shadow)"/>
+  <circle cx="24" cy="20" r="6" fill="white"/>
+</svg>

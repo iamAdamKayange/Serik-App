@@ -10,11 +10,15 @@ import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/saved_house_button.dart';
 import '../pages/login_page.dart';
+import '../pages/google_maps_navigation_screen.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 
 class RentalDetailScreen extends StatefulWidget {
   final RentalSpot spot;
+  final String? redirectTo;
+  final String? spotId;
 
-  const RentalDetailScreen({super.key, required this.spot});
+  const RentalDetailScreen({super.key, required this.spot, this.redirectTo, this.spotId});
 
   @override
   State<RentalDetailScreen> createState() => _RentalDetailScreenState();
@@ -38,7 +42,12 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
     if (!authProvider.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginPage()),
+          MaterialPageRoute(
+            builder: (context) => LoginPage(
+              redirectTo: 'details',
+              spotId: widget.spot.id,
+            ),
+          ),
         );
       });
     }
@@ -1714,14 +1723,35 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> {
               primaryColor,
             ),
             _actionButton(
-              Icons.directions,
-              "Eneo",
+              Icons.navigation,
+              "Naelekea",
               Colors.orange,
               isDark,
               () async {
                 if (widget.spot.hasValidLocation()) {
-                  final uri = Uri.parse(widget.spot.getDirectionsUrl());
-                  if (await canLaunchUrl(uri)) await launchUrl(uri);
+                  try {
+                    final currentPosition = await geo.Geolocator.getCurrentPosition(
+                      desiredAccuracy: geo.LocationAccuracy.high,
+                    );
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => GoogleMapsNavigationScreen(
+                            destination: widget.spot,
+                            currentPosition: currentPosition,
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      _showErrorSnackBar(
+                        context,
+                        context.tr('Imeshindikana kupata eneo lako', en: 'Could not get your location'),
+                      );
+                    }
+                  }
                 } else {
                   _showErrorSnackBar(
                     context,

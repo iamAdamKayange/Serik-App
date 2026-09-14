@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:serik/firebase_options.dart';
 import 'package:serik/l10n/app_localization.dart';
 import 'package:provider/provider.dart';
@@ -22,12 +21,6 @@ Future<void> main() async {
 
   // Load .env file
   await dotenv.load(fileName: ".env");
-
-  // Initialize Mapbox with token from .env
-  final mapboxToken = dotenv.env['MAPBOX_PUBLIC_TOKEN'];
-  if (mapboxToken != null && mapboxToken.isNotEmpty) {
-    MapboxOptions.setAccessToken(mapboxToken);
-  }
 
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};

@@ -59,6 +59,15 @@ android {
     }
 }
 
+// Force Kotlin stdlib version to avoid version conflicts
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:2.2.20")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.2.20")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.20")
+    }
+}
+
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("org.jetbrains.kotlin:kotlin-stdlib")

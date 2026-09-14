@@ -1,6 +1,9 @@
 // lib/providers/theme_provider.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:serik/services/api_services.dart';
+import 'package:flutter/foundation.dart';
 
 class ThemeProvider with ChangeNotifier {
   static const String _themeKey = 'theme_mode';
@@ -66,6 +69,19 @@ class ThemeProvider with ChangeNotifier {
     _locale = Locale(locale.languageCode);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_localeKey, _locale.languageCode);
+    
+    // Sync with backend if user is logged in
+    try {
+      final storage = const FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      if (token != null) {
+        await ApiService.updateLanguage(locale.languageCode);
+      }
+    } catch (e) {
+      // Don't block UI if backend sync fails
+      debugPrint('Language sync failed: $e');
+    }
+    
     notifyListeners();
   }
 

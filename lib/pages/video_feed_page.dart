@@ -1052,27 +1052,31 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: _items.length,
-            onPageChanged: (index) => setState(() => _currentIndex = index),
-            itemBuilder: (context, index) {
-              final item = _items[index];
-              return _VideoFeedTile(
-                key: ValueKey(item.videoUrl),
-                item: item,
-                isActive: index == _currentIndex && _canPlayCurrentVideo,
-                onLike: () => _toggleLike(item),
-                onComment: () => _showComments(item),
-                onShare: () => _share(item),
-                onOpenDetails: () => _openDetails(item),
-                isLoggedIn: isLoggedIn,
-              );
-            },
-          ),
+      body: RefreshIndicator(
+        onRefresh: _loadVideos,
+        backgroundColor: Colors.black,
+        color: colors.primary,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              scrollDirection: Axis.vertical,
+              itemCount: _items.length,
+              onPageChanged: (index) => setState(() => _currentIndex = index),
+              itemBuilder: (context, index) {
+                final item = _items[index];
+                return _VideoFeedTile(
+                  key: ValueKey(item.videoUrl),
+                  item: item,
+                  isActive: index == _currentIndex && _canPlayCurrentVideo,
+                  onLike: () => _toggleLike(item),
+                  onComment: () => _showComments(item),
+                  onShare: () => _share(item),
+                  onOpenDetails: () => _openDetails(item),
+                  isLoggedIn: isLoggedIn,
+                );
+              },
+            ),
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             left: 16,
@@ -1118,6 +1122,7 @@ class _VideoFeedPageState extends State<VideoFeedPage> {
           ),
         ],
       ),
+    ),
     );
   }
 }

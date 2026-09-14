@@ -21,8 +21,9 @@ import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/services/realtime_service.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:serik/config/map_config.dart';
-import 'package:serik/pages/mapbox_property_map_page.dart';
+import 'package:serik/pages/google_maps_property_map_page.dart';
+import 'package:serik/widgets/loading_states.dart';
+import 'package:serik/widgets/pull_to_refresh.dart';
 
 // Maeneo ya vyuo – yanaweza kubadilishwa kuwa dynamic kutoka API (kwa sasa ni static)
 const List<Map<String, dynamic>> universities = [
@@ -48,6 +49,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
   LatLng _currentPosition = const LatLng(-6.7924, 39.2083);
   final Set<Marker> _markers = {};
   final Set<Marker> _universityMarkers = {};
+  // ignore: unused_field
   bool _isLoading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -162,7 +164,8 @@ class _CustomMapPageState extends State<CustomMapPage> {
     setState(() => _isLoading = true);
     try {
       debugPrint('📍 Loading houses from backend...');
-      final List<dynamic> housesJson = await ApiService.getAllHouses();
+      // Use paginated API for better performance
+      final List<dynamic> housesJson = await ApiService.getAllHousesPaginated(limit: 100, offset: 0);
       debugPrint('✅ Loaded ${housesJson.length} houses from database');
 
       final List<RentalSpot> spots = housesJson.map((json) {
@@ -475,6 +478,12 @@ class _CustomMapPageState extends State<CustomMapPage> {
         return '🏗️';
       case 'biashara':
         return '🏪';
+      case 'room':
+        return '🚪';
+      case 'single room':
+        return '🚪';
+      case ' bedsitter':
+        return '🛋️';
       default:
         return '🏠';
     }
@@ -489,21 +498,26 @@ class _CustomMapPageState extends State<CustomMapPage> {
   Color _getMarkerColor(String type) {
     switch (type.toLowerCase()) {
       case 'apartment':
-        return const Color(0xFF2196F3);
+        return const Color(0xFF2196F3); // Blue
       case 'nyumba ya kawaida':
-        return const Color(0xFF4CAF50);
+        return const Color(0xFF4CAF50); // Green
       case 'studio':
-        return const Color(0xFFFF9800);
+        return const Color(0xFFFF9800); // Orange
       case 'mansion':
-        return const Color(0xFF9C27B0);
+        return const Color(0xFF9C27B0); // Purple
       case 'hostel':
-        return const Color(0xFF795548);
+        return const Color(0xFF795548); // Brown
       case 'ghorofa':
-        return const Color(0xFFE91E63);
+        return const Color(0xFFE91E63); // Pink
       case 'biashara':
-        return const Color(0xFFF44336);
+        return const Color(0xFFF44336); // Red
+      case 'room':
+      case 'single room':
+        return const Color(0xFF00BCD4); // Cyan
+      case 'bedsitter':
+        return const Color(0xFF8BC34A); // Light Green
       default:
-        return const Color(0xFF607D8B);
+        return const Color(0xFF607D8B); // Grey
     }
   }
 
@@ -653,7 +667,6 @@ class _CustomMapPageState extends State<CustomMapPage> {
                                       : null,
                                 ),
                                 child: Stack(
-                                  alignment: Alignment.center,
                                   children: [
                                     Icon(
                                       Icons.play_circle_filled,
@@ -1441,6 +1454,7 @@ class _CustomMapPageState extends State<CustomMapPage> {
     _loadMarkers();
   }
 
+  // ignore: unused_element
   void _resetFilters() {
     setState(() {
       _minPrice = 0;
@@ -1453,11 +1467,13 @@ class _CustomMapPageState extends State<CustomMapPage> {
     _refreshMarkers();
   }
 
+  // ignore: unused_element
   void _searchProperties(String query) {
     setState(() => _searchQuery = query);
     _refreshMarkers();
   }
 
+  // ignore: unused_element
   void _clearSearch() {
     setState(() {
       _searchQuery = '';
@@ -1476,361 +1492,9 @@ class _CustomMapPageState extends State<CustomMapPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Switch between Google Maps and Mapbox based on config
-    if (MapConfig.useMapbox) {
-      return MapboxPropertyMapPage.browse(
-        selectedUniversity: widget.selectedUniversity,
-      );
-    }
-    
-    // Original Google Maps implementation
-    return Scaffold(
-      body: Stack(
-        children: [
-          GoogleMap(
-            mapType: MapType.normal,
-            initialCameraPosition: CameraPosition(
-              target: _currentPosition,
-              zoom: 12,
-            ),
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            markers: {..._markers, ..._universityMarkers},
-            onMapCreated: (controller) => _controller.complete(controller),
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 100,
-              bottom: 20,
-            ),
-            style: isDarkMode ? _getDarkMapStyle() : null,
-          ),
-          // Search bar
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: searchBarBg,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.search_rounded,
-                    color: isDarkMode ? Colors.white70 : Colors.grey[600],
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      style: TextStyle(color: textColor),
-                      decoration: InputDecoration(
-                        hintText: context.tr(
-                          'Tafuta nyumba, eneo, bei...',
-                          en: 'Search houses, area, price...',
-                        ),
-                        border: InputBorder.none,
-                        hintStyle: TextStyle(
-                          color: isDarkMode ? Colors.grey[500] : Colors.grey,
-                        ),
-                      ),
-                      onChanged: _searchProperties,
-                    ),
-                  ),
-                  if (_searchQuery.isNotEmpty)
-                    IconButton(
-                      icon: Icon(Icons.close_rounded, color: primaryColor),
-                      onPressed: _clearSearch,
-                      tooltip: context.tr('Futa utafutaji', en: 'Clear search'),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          // University filter indicator
-          if (_selectedUniversity != 'Zote' && !_isLoading)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 80,
-              left: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.school, color: Colors.white, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Karibu na $_selectedUniversity',
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedUniversity = 'Zote');
-                        _refreshMarkers();
-                      },
-                      child: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          // Counter badge
-          if (_markers.isNotEmpty && !_isLoading)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 80,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: primaryColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.home_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Nyumba ${_markers.length} zimepatikana',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          Positioned(
-            bottom: 100,
-            right: 16,
-            child: Container(
-              decoration: BoxDecoration(
-                color: searchBarBg,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert_rounded, color: primaryColor),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'location':
-                      _determinePosition();
-                      break;
-                    case 'refresh':
-                      _refreshMarkers();
-                      break;
-                    case 'reset':
-                      _resetFilters();
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'location',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.my_location_rounded, size: 20),
-                        const SizedBox(width: 10),
-                        Text(context.tr('Eneo langu', en: 'My location')),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'refresh',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.refresh_rounded, size: 20),
-                        const SizedBox(width: 10),
-                        Text(context.tr('Pakia upya', en: 'Refresh')),
-                      ],
-                    ),
-                  ),
-                  if ((_selectedType != 'Zote' ||
-                      _minPrice > 0 ||
-                      _maxPrice < 1000000 ||
-                      _selectedUniversity != 'Zote' ||
-                      _searchQuery.isNotEmpty))
-                    PopupMenuItem(
-                      value: 'reset',
-                      child: Row(
-                        children: [
-                          const Icon(Icons.clear_all_rounded, size: 20),
-                          const SizedBox(width: 10),
-                          Text(context.tr('Weka upya', en: 'Reset')),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // Retry button when no houses and not loading (network error)
-          if (!_isLoading && _rentalSpots.isEmpty && _markers.isEmpty)
-            Positioned.fill(
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  margin: const EdgeInsets.symmetric(horizontal: 40),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 10),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.wifi_off,
-                        size: 60,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.orange[300]
-                            : Colors.orange[600],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        context.tr('Imeshindwa kupakia nyumba', en: 'Failed to load houses'),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        context.tr('Tafadhali angalia muunganisho wako wa intaneti', en: 'Please check your internet connection'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: subtextColor),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: () => _loadRentalSpotsFromAPI(),
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: Text(context.tr('Jaribu Tena', en: 'Try Again')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Loading indicator
-          if (_isLoading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withAlpha(77),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: loadingBg,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 16,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Lottie.asset(
-                          "assets/animations/map_loading.json",
-                          height: 80,
-                          width: 80,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "Inapakia nyumba...",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: primaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "${_rentalSpots.length} nyumba zimepatikana",
-                          style: TextStyle(color: subtextColor),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+    // Use Google Maps property map
+    return GoogleMapsPropertyMapPage.browse(
+      selectedUniversity: widget.selectedUniversity,
     );
-  }
-
-  String _getDarkMapStyle() => '''
-    [
-      {"elementType": "geometry", "stylers": [{"color": "#242f3e"}]},
-      {"elementType": "labels.text.fill", "stylers": [{"color": "#746855"}]},
-      {"elementType": "labels.text.stroke", "stylers": [{"color": "#242f3e"}]},
-      {"featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
-      {"featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
-      {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#263c3f"}]},
-      {"featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{"color": "#6b9a76"}]},
-      {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#38414e"}]},
-      {"featureType": "road", "elementType": "geometry.stroke", "stylers": [{"color": "#212a37"}]},
-      {"featureType": "road", "elementType": "labels.text.fill", "stylers": [{"color": "#9ca5b3"}]},
-      {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#746855"}]},
-      {"featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{"color": "#1f2835"}]},
-      {"featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{"color": "#f3d19c"}]},
-      {"featureType": "transit", "elementType": "geometry", "stylers": [{"color": "#2f3948"}]},
-      {"featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
-      {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#17263c"}]},
-      {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#515c6d"}]},
-      {"featureType": "water", "elementType": "labels.text.stroke", "stylers": [{"color": "#17263c"}]}
-    ]
-  ''';
-
-  @override
-  void dispose() {
-    RealtimeService.instance.off('house:changed', _houseChangeListener);
-    _searchController.dispose();
-    super.dispose();
   }
 }

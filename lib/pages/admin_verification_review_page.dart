@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/services/api_services.dart';
+import 'package:serik/widgets/pull_to_refresh.dart';
 
 class AdminVerificationReviewPage extends StatefulWidget {
   const AdminVerificationReviewPage({super.key});
@@ -33,27 +35,29 @@ class _AdminVerificationReviewPageState extends State<AdminVerificationReviewPag
         _isLoading = false;
       });
     } catch (e) {
+      final l10n = AppLocalizations.of(context);
       setState(() {
-        _errorMessage = 'Failed to load pending verifications';
+        _errorMessage = l10n.tr('Imeshindwa kupakia verifications', en: 'Failed to load pending verifications');
         _isLoading = false;
       });
     }
   }
 
   Future<void> _reviewVerification(String verificationId, String status, {String? adminNotes}) async {
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Confirm $status'),
-        content: Text('Are you sure you want to $status this verification?'),
+        title: Text(l10n.tr('Thibitisha $status', en: 'Confirm $status')),
+        content: Text(l10n.tr('Una hakika unataka $status verification hii?', en: 'Are you sure you want to $status this verification?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.tr('Ghairi', en: 'Cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            child: Text(l10n.tr('Thibitisha', en: 'Confirm')),
           ),
         ],
       ),
@@ -76,17 +80,17 @@ class _AdminVerificationReviewPageState extends State<AdminVerificationReviewPag
 
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Verification $status successfully')),
+            SnackBar(content: Text(l10n.tr('Verification $status ilifanikiwa', en: 'Verification $status successfully'))),
           );
           await _loadPendingVerifications();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to review verification')),
+            SnackBar(content: Text(l10n.tr('Imeshindwa kukagua verification', en: 'Failed to review verification'))),
           );
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(l10n.tr('Hitilafu: $e', en: 'Error: $e'))),
         );
       } finally {
         setState(() => _isLoading = false);
@@ -96,6 +100,7 @@ class _AdminVerificationReviewPageState extends State<AdminVerificationReviewPag
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final primaryColor = isDark ? const Color(0xFF4CAF50) : const Color(0xFF2E7D32);
     final backgroundColor = isDark ? const Color(0xFF121212) : Colors.grey[50]!;
@@ -104,52 +109,55 @@ class _AdminVerificationReviewPageState extends State<AdminVerificationReviewPag
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Admin Verification Review'),
+        title: Text(l10n.tr('Admin Verification Review', en: 'Admin Verification Review')),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
-          _buildTabBar(isDark, primaryColor),
+          _buildTabBar(isDark, primaryColor, l10n),
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _errorMessage != null
-                    ? Center(child: Text(_errorMessage!))
-                    : _pendingVerifications.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.inbox, size: 64, color: Colors.grey),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No pending verifications',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                              ],
+            child: RefreshIndicator(
+              onRefresh: _loadPendingVerifications,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _errorMessage != null
+                      ? Center(child: Text(_errorMessage!))
+                      : _pendingVerifications.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.inbox, size: 64, color: Colors.grey),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    l10n.tr('Hakuna verifications zinazosubiri', en: 'No pending verifications'),
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _pendingVerifications.length,
+                              itemBuilder: (context, index) {
+                                final verification = _pendingVerifications[index];
+                                return _buildVerificationCard(
+                                  verification,
+                                  isDark,
+                                  cardColor,
+                                  primaryColor,
+                                );
+                              },
                             ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _pendingVerifications.length,
-                            itemBuilder: (context, index) {
-                              final verification = _pendingVerifications[index];
-                              return _buildVerificationCard(
-                                verification,
-                                isDark,
-                                cardColor,
-                                primaryColor,
-                              );
-                            },
-                          ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTabBar(bool isDark, Color primaryColor) {
+  Widget _buildTabBar(bool isDark, Color primaryColor, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
@@ -179,7 +187,7 @@ class _AdminVerificationReviewPageState extends State<AdminVerificationReviewPag
                 ),
                 child: Center(
                   child: Text(
-                    'Identity Verification',
+                    l10n.tr('Uthibitishaji wa Identity', en: 'Identity Verification'),
                     style: TextStyle(
                       color: _selectedTab == 0 ? primaryColor : Colors.grey,
                       fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.normal,
@@ -209,7 +217,7 @@ class _AdminVerificationReviewPageState extends State<AdminVerificationReviewPag
                 ),
                 child: Center(
                   child: Text(
-                    'Property Verification',
+                    l10n.tr('Uthibitishaji wa Mali', en: 'Property Verification'),
                     style: TextStyle(
                       color: _selectedTab == 1 ? primaryColor : Colors.grey,
                       fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.normal,

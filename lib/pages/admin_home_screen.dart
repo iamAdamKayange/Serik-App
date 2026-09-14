@@ -1,9 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:serik/l10n/app_localization.dart';
 import 'package:serik/providers/auth_provider.dart';
+// ignore: unused_import
+import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/services/api_services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:serik/widgets/loading_states.dart';
+import 'package:serik/widgets/pull_to_refresh.dart';
+import 'package:serik/pages/admin_house_details_page.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -15,16 +22,13 @@ class AdminHomeScreen extends StatefulWidget {
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   int _selectedIndex = 0;
   bool _isLoading = true;
-  Map<String, dynamic>? _dashboardData;
   List<dynamic>? _verificationQueue;
   List<dynamic>? _recentUsers;
   List<dynamic>? _houses;
   List<dynamic>? _allUsers;
   List<dynamic>? _newRegistrations;
-  // ignore: unused_field
-  String _searchQuery = '';
-  String _userFilter = 'all'; // all, verified, pending, banned
-  String _houseFilter = 'all'; // all, active, inactive
+  String _userSearchQuery = '';
+  String _houseSearchQuery = '';
 
   @override
   void initState() {
@@ -35,347 +39,203 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      final data = await ApiService.getAdminDashboard();
-      final queue = await ApiService.getVerificationQueue();
-      final users = await ApiService.getRecentUsers();
-      final houses = await ApiService.getAllHouses();
-      final allUsers = await ApiService.getAllUsers();
-      final newRegs = await ApiService.getNewRegistrations();
+      final results = await Future.wait([
+        ApiService.getVerificationQueue(),
+        ApiService.getRecentUsers(),
+        ApiService.getAllHouses(),
+        ApiService.getAllUsers(),
+        ApiService.getNewRegistrations(),
+      ]);
 
+      if (!mounted) return;
       setState(() {
-        _dashboardData = data;
-        _verificationQueue = queue;
-        _recentUsers = users;
-        _houses = houses;
-        _allUsers = allUsers;
-        _newRegistrations = newRegs;
+        _verificationQueue = results[0];
+        _recentUsers = results[1];
+        _houses = results[2];
+        _allUsers = results[3];
+        _newRegistrations = results[4];
         _isLoading = false;
       });
     } catch (e) {
       debugPrint('Error loading dashboard: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final locale = Localizations.localeOf(context);
-    final isSwahili = locale.languageCode == 'sw';
+    final authProvider = Provider.of<AuthProvider>(context);
 
-    final primaryColor = isDark
-        ? const Color(0xFF46D39A)
-        : const Color(0xFF0F8B61);
-    final backgroundColor = isDark
-        ? const Color(0xFF0D1110)
-        : const Color(0xFFF7F9F8);
-    final cardColor = isDark ? const Color(0xFF171C1A) : Colors.white;
-    final textColor = isDark
-        ? const Color(0xFFF2F7F4)
-        : const Color(0xFF15201C);
-    final subtextColor = isDark
-        ? const Color(0xFF9CA3AF)
-        : const Color(0xFF6B7280);
+    final primaryColor = const Color(0xFF0F8B61);
+    final backgroundColor = isDark ? const Color(0xFF0D1110) : const Color(0xFFF7F9F8);
+    final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
+    final textColor = isDark ? const Color(0xFFE6EDF3) : const Color(0xFF0D1117);
+    final subtextColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF656D76);
+    final borderColor = isDark ? const Color(0xFF30363D) : const Color(0xFFD0D7DE);
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: Row(
+      body: Column(
         children: [
-          // Sidebar Navigation
-          _buildSidebar(
-            isDark,
-            primaryColor,
-            cardColor,
-            textColor,
-            subtextColor,
-            isSwahili,
-          ),
+          // Professional Admin Header (No back button - this is root)
+          _buildAdminHeader(authProvider, l10n, isDark, primaryColor, textColor, subtextColor, borderColor),
+          
           // Main Content
           Expanded(
-            child: Column(
-              children: [
-                // Top Bar
-                _buildTopBar(
-                  isDark,
-                  primaryColor,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                  isSwahili,
-                ),
-                // Content Area
-                Expanded(
-                  child: _isLoading
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const CircularProgressIndicator(
-                                color: Color(0xFF46D39A),
-                                strokeWidth: 3,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                isSwahili ? 'Inasubiri...' : 'Loading...',
-                                style: GoogleFonts.poppins(
-                                  color: subtextColor,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : _buildContent(
-                          isDark,
-                          primaryColor,
-                          cardColor,
-                          textColor,
-                          subtextColor,
-                          isSwahili,
-                        ),
-                ),
-              ],
-            ),
+            child: _isLoading
+                ? LoadingState(
+                    message: l10n.tr('Inapakia data ya dashboard...', en: 'Loading dashboard data...'),
+                    variant: LoadingVariant.circular,
+                  )
+                : CustomPullToRefresh(
+                    onRefresh: _loadDashboardData,
+                    child: _buildSelectedContent(l10n, isDark, cardColor, textColor, subtextColor, borderColor, primaryColor),
+                  ),
           ),
+          
+          // Bottom Navigation
+          _buildBottomNavigation(isDark, primaryColor, textColor, subtextColor, borderColor),
         ],
       ),
     );
   }
 
-  Widget _buildSidebar(
+  Widget _buildAdminHeader(
+    AuthProvider authProvider,
+    AppLocalizations l10n,
     bool isDark,
     Color primaryColor,
-    Color cardColor,
     Color textColor,
     Color subtextColor,
-    bool isSwahili,
+    Color borderColor,
   ) {
     return Container(
-      width: 280,
-      color: cardColor,
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161B22) : Colors.white,
+        border: Border(
+          bottom: BorderSide(color: borderColor, width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          // Logo
+          // Logo/Brand
           Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: primaryColor),
-            child: Row(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.admin_panel_settings,
+              color: Color(0xFF0F8B61),
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          
+          // Title and subtitle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.home_work_rounded,
-                    color: Color(0xFF0F8B61),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Text(
                   'SERK Admin',
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  l10n.tr('Dashboard ya Usimamizi wa Jukwaa', en: 'Platform Management Dashboard'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: subtextColor,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          // Navigation Items
-          _buildNavItem(
-            Icons.dashboard_rounded,
-            isSwahili ? 'Dashboard' : 'Dashboard',
-            0,
-            isDark,
-            primaryColor,
-            textColor,
-            subtextColor,
-          ),
-          _buildNavItem(
-            Icons.people_rounded,
-            isSwahili ? 'Watumiaji' : 'Users',
-            1,
-            isDark,
-            primaryColor,
-            textColor,
-            subtextColor,
-          ),
-          _buildNavItem(
-            Icons.home_rounded,
-            isSwahili ? 'Nyumba' : 'Houses',
-            2,
-            isDark,
-            primaryColor,
-            textColor,
-            subtextColor,
-          ),
-          _buildNavItem(
-            Icons.verified_user_rounded,
-            isSwahili ? 'Uthibitishaji' : 'Verification',
-            3,
-            isDark,
-            primaryColor,
-            textColor,
-            subtextColor,
-          ),
-          _buildNavItem(
-            Icons.analytics_rounded,
-            isSwahili ? 'Analytics' : 'Analytics',
-            4,
-            isDark,
-            primaryColor,
-            textColor,
-            subtextColor,
-          ),
-          _buildNavItem(
-            Icons.settings_rounded,
-            isSwahili ? 'Mipangilio' : 'Settings',
-            5,
-            isDark,
-            primaryColor,
-            textColor,
-            subtextColor,
-          ),
-          const Spacer(),
-          // Logout
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: ListTile(
-              leading: Icon(Icons.logout_rounded, color: Colors.red),
-              title: Text(
-                isSwahili ? 'Ondoka' : 'Logout',
-                style: GoogleFonts.poppins(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () {
-                Provider.of<AuthProvider>(context, listen: false).logout();
-                Navigator.pushReplacementNamed(context, '/login');
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildNavItem(
-    IconData icon,
-    String label,
-    int index,
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-  ) {
-    final isSelected = _selectedIndex == index;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isSelected ? primaryColor : subtextColor,
-          size: 24,
-        ),
-        title: Text(
-          label,
-          style: GoogleFonts.poppins(
-            color: isSelected ? primaryColor : textColor,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            fontSize: 14,
-          ),
-        ),
-        selected: isSelected,
-        selectedTileColor: primaryColor.withValues(alpha: 0.1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onTap: () {
-          setState(() => _selectedIndex = index);
-        },
-      ),
-    );
-  }
-
-  Widget _buildTopBar(
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        border: Border(
-          bottom: BorderSide(
-            color: isDark ? const Color(0xFF26312D) : const Color(0xFFE2E8E5),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Text(
-            isSwahili ? 'Dashboard ya Admin' : 'Admin Dashboard',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            ),
-          ),
-          const Spacer(),
-          // Quick Actions
-          IconButton(
-            icon: Icon(Icons.refresh_rounded, color: subtextColor),
-            onPressed: _loadDashboardData,
-            tooltip: isSwahili ? 'Pitia upya' : 'Refresh',
-          ),
-          const SizedBox(width: 8),
-          // User Profile
+          // Profile section
           Row(
             children: [
+              // Refresh button
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                color: subtextColor,
+                onPressed: _loadDashboardData,
+                tooltip: l10n.tr('Refresh Data', en: 'Refresh Data'),
+              ),
+              
+              // User avatar
               Container(
-                width: 40,
-                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  color: isDark ? const Color(0xFF21262D) : const Color(0xFFF6F8FA),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: borderColor),
                 ),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: primaryColor,
-                  size: 20,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: primaryColor.withValues(alpha: 0.2),
+                      backgroundImage: authProvider.avatarUrl != null
+                          ? CachedNetworkImageProvider(authProvider.avatarUrl!)
+                          : null,
+                      child: authProvider.avatarUrl == null
+                          ? Text(
+                              authProvider.userName?.substring(0, 1).toUpperCase() ?? 'A',
+                              style: GoogleFonts.poppins(
+                                color: primaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          authProvider.userName ?? 'Admin',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                        Text(
+                          'Administrator',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            color: subtextColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    authProvider.userName ?? 'Admin',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
-                  Text(
-                    'Admin',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: subtextColor,
-                    ),
-                  ),
-                ],
+              
+              // Logout button
+              IconButton(
+                icon: const Icon(Icons.logout_rounded),
+                color: Colors.red,
+                onPressed: () => _showLogoutDialog(),
+                tooltip: 'Logout',
               ),
             ],
           ),
@@ -384,189 +244,120 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  Widget _buildContent(
+  Widget _buildSelectedContent(
+    AppLocalizations l10n,
     bool isDark,
-    Color primaryColor,
     Color cardColor,
     Color textColor,
     Color subtextColor,
-    bool isSwahili,
+    Color borderColor,
+    Color primaryColor,
   ) {
     switch (_selectedIndex) {
       case 0:
-        return _buildDashboardContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
+        return _buildDashboardTab(isDark, cardColor, textColor, subtextColor, borderColor, primaryColor, l10n);
       case 1:
-        return _buildUsersContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
+        return _buildUsersTab(isDark, cardColor, textColor, subtextColor, borderColor, primaryColor, l10n);
       case 2:
-        return _buildHousesContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
+        return _buildHousesTab(isDark, cardColor, textColor, subtextColor, borderColor, primaryColor, l10n);
       case 3:
-        return _buildVerificationContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
-      case 4:
-        return _buildAnalyticsContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
-      case 5:
-        return _buildSettingsContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
+        return _buildVerificationsTab(isDark, cardColor, textColor, subtextColor, borderColor, primaryColor, l10n);
       default:
-        return _buildDashboardContent(
-          isDark,
-          primaryColor,
-          cardColor,
-          textColor,
-          subtextColor,
-          isSwahili,
-        );
+        return _buildDashboardTab(isDark, cardColor, textColor, subtextColor, borderColor, primaryColor, l10n);
     }
   }
 
-  Widget _buildDashboardContent(
+  Widget _buildDashboardTab(
     bool isDark,
-    Color primaryColor,
     Color cardColor,
     Color textColor,
     Color subtextColor,
-    bool isSwahili,
+    Color borderColor,
+    Color primaryColor,
+    AppLocalizations l10n,
   ) {
-    final totalUsers = _dashboardData?['totalUsers'] ?? _allUsers?.length ?? 0;
-    final totalHouses = _dashboardData?['totalHouses'] ?? _houses?.length ?? 0;
-    final pendingVerifications = _verificationQueue?.length ?? 0;
-    final revenue = _dashboardData?['revenue']?.toString() ?? '0';
-
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // KPI Cards
+          // KPI Cards Row
           Row(
             children: [
               Expanded(
                 child: _buildKPICard(
-                  Icons.people_rounded,
-                  isSwahili ? 'Watumiaji' : 'Users',
-                  '$totalUsers',
+                  Icons.people_outline,
+                  _allUsers?.length.toString() ?? '0',
+                  l10n.tr('Watumiaji Jumla', en: 'Total Users'),
                   isDark,
-                  primaryColor,
                   cardColor,
                   textColor,
                   subtextColor,
+                  primaryColor,
+                  const Color(0xFF3B82F6),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildKPICard(
-                  Icons.home_rounded,
-                  isSwahili ? 'Nyumba' : 'Houses',
-                  '$totalHouses',
+                  Icons.home_outlined,
+                  _houses?.length.toString() ?? '0',
+                  l10n.tr('Nyumba Jumla', en: 'Total Houses'),
                   isDark,
-                  primaryColor,
                   cardColor,
                   textColor,
                   subtextColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKPICard(
-                  Icons.verified_user_rounded,
-                  isSwahili ? 'Uthibitishaji' : 'Verifications',
-                  '$pendingVerifications',
-                  isDark,
                   primaryColor,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKPICard(
-                  Icons.monetization_on_rounded,
-                  isSwahili ? 'Mapato' : 'Revenue',
-                  revenue,
-                  isDark,
-                  primaryColor,
-                  cardColor,
-                  textColor,
-                  subtextColor,
+                  const Color(0xFF10B981),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          // Recent Activity
-          _buildSectionCard(
-            Icons.history_rounded,
-            isSwahili ? 'Watumiaji Wapya' : 'New Users',
-            _buildRecentActivityList(
-              isDark,
-              primaryColor,
-              textColor,
-              subtextColor,
-              isSwahili,
-            ),
-            isDark,
-            cardColor,
-            textColor,
-            subtextColor,
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildKPICard(
+                  Icons.verified_user_outlined,
+                  _verificationQueue?.length.toString() ?? '0',
+                  l10n.tr('Uthibitishaji Zinasubiri', en: 'Pending Verifications'),
+                  isDark,
+                  cardColor,
+                  textColor,
+                  subtextColor,
+                  primaryColor,
+                  const Color(0xFFF59E0B),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildKPICard(
+                  Icons.person_add_outlined,
+                  _newRegistrations?.length.toString() ?? '0',
+                  l10n.tr('Usajili Mpya', en: 'New Registrations'),
+                  isDark,
+                  cardColor,
+                  textColor,
+                  subtextColor,
+                  primaryColor,
+                  const Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
           ),
+          
           const SizedBox(height: 24),
-          // Verification Queue Preview
-          _buildSectionCard(
-            Icons.verified_user_rounded,
-            isSwahili ? 'Orodha ya Uthibitishaji' : 'Verification Queue',
-            _buildVerificationQueuePreview(
-              isDark,
-              primaryColor,
-              textColor,
-              subtextColor,
-              isSwahili,
-            ),
-            isDark,
-            cardColor,
-            textColor,
-            subtextColor,
-          ),
+
+          // Recent Activity Section
+          _buildSectionHeader(l10n.tr('Shughuli za Hivi Karibuni', en: 'Recent Activity'), Icons.timeline, isDark, textColor, subtextColor, l10n),
+          const SizedBox(height: 16),
+          
+          // Recent Users
+          _buildRecentUsersSection(isDark, cardColor, textColor, subtextColor, borderColor, l10n),
+          const SizedBox(height: 24),
+
+          // Recent Houses
+          _buildRecentHousesSection(isDark, cardColor, textColor, subtextColor, borderColor, l10n),
         ],
       ),
     );
@@ -574,2200 +365,993 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   Widget _buildKPICard(
     IconData icon,
-    String label,
     String value,
+    String label,
     bool isDark,
-    Color primaryColor,
     Color cardColor,
     Color textColor,
     Color subtextColor,
+    Color primaryColor,
+    Color iconColor,
   ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: isDark
-            ? Border.all(color: const Color(0xFF26312D), width: 0.5)
-            : null,
+        border: Border.all(color: isDark ? const Color(0xFF30363D) : const Color(0xFFE5E7EB)),
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.grey.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: primaryColor, size: 24),
+            child: Icon(icon, color: iconColor, size: 24),
           ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: primaryColor,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: subtextColor,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.poppins(fontSize: 14, color: subtextColor),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionCard(
-    IconData icon,
-    String title,
-    Widget content,
+  Widget _buildSectionHeader(String title, IconData icon, bool isDark, Color textColor, Color subtextColor, AppLocalizations l10n) {
+    return Row(
+      children: [
+        Icon(icon, color: textColor, size: 20),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentUsersSection(
     bool isDark,
     Color cardColor,
     Color textColor,
     Color subtextColor,
+    Color borderColor,
+    AppLocalizations l10n,
   ) {
+    final recentUsers = _recentUsers?.take(5).toList() ?? [];
+    
+    if (recentUsers.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: const EmptyState(
+          title: 'No recent users',
+          subtitle: 'New user registrations will appear here',
+          icon: Icons.people_outline,
+        ),
+      );
+    }
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: isDark
-            ? Border.all(color: const Color(0xFF26312D), width: 0.5)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.grey.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: textColor, size: 24),
-              const SizedBox(width: 12),
               Text(
-                title,
+                l10n.tr('Watumiaji wa Hivi Karibuni', en: 'Recent Users'),
                 style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                   color: textColor,
                 ),
               ),
+              Text(
+                l10n.tr('Ona Zote', en: 'View All'),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF0F8B61),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          content,
+          ...recentUsers.map((user) => _buildUserListItem(user, isDark, textColor, subtextColor)),
         ],
       ),
     );
   }
 
-  Widget _buildRecentActivityList(
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    if (_recentUsers == null || _recentUsers!.isEmpty) {
-      return Center(
-        child: Text(
-          isSwahili ? 'Hakuna shughuli za hivi karibuni' : 'No recent activity',
-          style: GoogleFonts.poppins(color: subtextColor),
-        ),
-      );
-    }
-
-    return Column(
-      children: _recentUsers!.take(5).map((user) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: primaryColor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user['name']?.toString() ??
-                          user['firstName']?.toString() ??
-                          'Unknown',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      isSwahili ? 'Amejiandikwa' : 'Registered',
-                      style: GoogleFonts.poppins(
-                        color: subtextColor,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                _formatTimestamp(user['createdAt']?.toString() ?? ''),
-                style: GoogleFonts.poppins(color: subtextColor, fontSize: 12),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  String _formatTimestamp(String timestamp) {
-    if (timestamp.isEmpty) return '';
-    try {
-      final dateTime = DateTime.parse(timestamp);
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-
-      if (difference.inMinutes < 1) {
-        return 'Just now';
-      } else if (difference.inMinutes < 60) {
-        return '${difference.inMinutes} min';
-      } else if (difference.inHours < 24) {
-        return '${difference.inHours} hours';
-      } else {
-        return '${difference.inDays} days';
-      }
-    } catch (e) {
-      return timestamp;
-    }
-  }
-
-  Widget _buildVerificationQueuePreview(
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    if (_verificationQueue == null || _verificationQueue!.isEmpty) {
-      return Center(
-        child: Text(
-          isSwahili
-              ? 'Hakuna ombi la uthibitishaji'
-              : 'No verification requests',
-          style: GoogleFonts.poppins(color: subtextColor),
-        ),
-      );
-    }
-
-    return Column(
-      children: _verificationQueue!.take(3).map((item) {
-        final name =
-            item['name']?.toString() ??
-            item['fullName']?.toString() ??
-            'Unknown';
-        final email = item['email']?.toString() ?? '';
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.pending_rounded,
-                  color: Colors.orange,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      email,
-                      style: GoogleFonts.poppins(
-                        color: subtextColor,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Pending',
-                  style: GoogleFonts.poppins(
-                    color: Colors.orange,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildUsersContent(
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Search and Filters
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: isSwahili
-                        ? 'Tafuta watumiaji...'
-                        : 'Search users...',
-                    prefixIcon: Icon(Icons.search, color: subtextColor),
-                    filled: true,
-                    fillColor: isDark
-                        ? const Color(0xFF111614)
-                        : const Color(0xFFF1F5F3),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() => _searchQuery = value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF111614)
-                      : const Color(0xFFF1F5F3),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _userFilter,
-                    style: GoogleFonts.poppins(color: textColor),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'all',
-                        child: Text(isSwahili ? 'Wote' : 'All'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'verified',
-                        child: Text(isSwahili ? 'Walioidhinishwa' : 'Verified'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'pending',
-                        child: Text(isSwahili ? 'Wanasubiri' : 'Pending'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'banned',
-                        child: Text(isSwahili ? 'Waliokataliwa' : 'Banned'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _userFilter = value ?? 'all');
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // Users List
-          if (_allUsers == null || _allUsers!.isEmpty)
-            Center(
-              child: Text(
-                isSwahili ? 'Hakuna watumiaji' : 'No users found',
-                style: GoogleFonts.poppins(color: subtextColor),
-              ),
-            )
-          else
-            ..._allUsers!.map((user) {
-              return _buildUserCard(
-                user,
-                isDark,
-                primaryColor,
-                cardColor,
-                textColor,
-                subtextColor,
-                isSwahili,
-              );
-            }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUserCard(
-    Map<String, dynamic> user,
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    final userId = user['id']?.toString() ?? '';
-    final name =
-        user['name']?.toString() ?? user['firstName']?.toString() ?? 'Unknown';
+  Widget _buildUserListItem(dynamic user, bool isDark, Color textColor, Color subtextColor) {
+    final name = user['name']?.toString() ?? 'Unknown';
     final email = user['email']?.toString() ?? '';
     final role = user['role']?.toString() ?? 'normal';
-    final isBanned = user['isBanned'] == true;
-    final isVerified = user['isVerified'] == true;
-    final phone = user['phone']?.toString() ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: isDark
-            ? Border.all(color: const Color(0xFF26312D), width: 0.5)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.grey.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: primaryColor,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                    ),
-                    Text(
-                      email,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: subtextColor,
-                      ),
-                    ),
-                    if (phone.isNotEmpty)
-                      Text(
-                        phone,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: subtextColor,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: isBanned
-                      ? Colors.red.withValues(alpha: 0.1)
-                      : isVerified
-                      ? Colors.green.withValues(alpha: 0.1)
-                      : Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  isBanned
-                      ? isSwahili
-                            ? 'Imekataliwa'
-                            : 'Banned'
-                      : isVerified
-                      ? isSwahili
-                            ? 'Imeidhinishwa'
-                            : 'Verified'
-                      : isSwahili
-                      ? 'Inasubiri'
-                      : 'Pending',
-                  style: GoogleFonts.poppins(
-                    color: isBanned
-                        ? Colors.red
-                        : isVerified
-                        ? Colors.green
-                        : Colors.orange,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              // Role Badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: role == 'admin'
-                      ? Colors.purple.withValues(alpha: 0.1)
-                      : role == 'landlord'
-                      ? Colors.blue.withValues(alpha: 0.1)
-                      : Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  role.toUpperCase(),
-                  style: GoogleFonts.poppins(
-                    color: role == 'admin'
-                        ? Colors.purple
-                        : role == 'landlord'
-                        ? Colors.blue
-                        : Colors.grey,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              // Actions
-              IconButton(
-                icon: Icon(Icons.visibility_rounded, color: primaryColor),
-                onPressed: () => _showUserDetails(
-                  user,
-                  isDark,
-                  primaryColor,
-                  textColor,
-                  subtextColor,
-                  isSwahili,
-                ),
-                tooltip: isSwahili ? 'Angalia' : 'View',
-              ),
-              IconButton(
-                icon: Icon(Icons.edit_rounded, color: primaryColor),
-                onPressed: () => _editUser(
-                  user,
-                  isDark,
-                  primaryColor,
-                  textColor,
-                  subtextColor,
-                  isSwahili,
-                ),
-                tooltip: isSwahili ? 'Hariri' : 'Edit',
-              ),
-              if (isBanned)
-                IconButton(
-                  icon: Icon(Icons.block_rounded, color: Colors.green),
-                  onPressed: () => _unbanUser(userId, isSwahili),
-                  tooltip: isSwahili ? 'Ruisha Uban' : 'Unban',
-                )
-              else
-                IconButton(
-                  icon: Icon(Icons.block_rounded, color: Colors.red),
-                  onPressed: () => _banUser(userId, isSwahili),
-                  tooltip: isSwahili ? 'Ban' : 'Ban',
-                ),
-              IconButton(
-                icon: Icon(Icons.delete_rounded, color: Colors.red),
-                onPressed: () => _deleteUser(userId, isSwahili),
-                tooltip: isSwahili ? 'Futa' : 'Delete',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHousesContent(
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Search and Filters
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: isSwahili
-                        ? 'Tafuta nyumba...'
-                        : 'Search houses...',
-                    prefixIcon: Icon(Icons.search, color: subtextColor),
-                    filled: true,
-                    fillColor: isDark
-                        ? const Color(0xFF111614)
-                        : const Color(0xFFF1F5F3),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() => _searchQuery = value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF111614)
-                      : const Color(0xFFF1F5F3),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _houseFilter,
-                    style: GoogleFonts.poppins(color: textColor),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'all',
-                        child: Text(isSwahili ? 'Zote' : 'All'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'active',
-                        child: Text(isSwahili ? 'Zinazofanya kazi' : 'Active'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'inactive',
-                        child: Text(
-                          isSwahili ? 'Zisizofanya kazi' : 'Inactive',
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _houseFilter = value ?? 'all');
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // Houses List
-          if (_houses == null || _houses!.isEmpty)
-            Center(
-              child: Text(
-                isSwahili ? 'Hakuna nyumba' : 'No houses found',
-                style: GoogleFonts.poppins(color: subtextColor),
-              ),
-            )
-          else
-            ..._houses!.map((house) {
-              return _buildHouseCard(
-                house,
-                isDark,
-                primaryColor,
-                cardColor,
-                textColor,
-                subtextColor,
-                isSwahili,
-              );
-            }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHouseCard(
-    Map<String, dynamic> house,
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    final houseId = house['id']?.toString() ?? '';
-    final title =
-        house['brandName']?.toString() ??
-        house['title']?.toString() ??
-        'Unknown';
-    final location =
-        house['location']?.toString() ?? house['address']?.toString() ?? '';
-    final region = house['region']?.toString() ?? '';
-    final district = house['district']?.toString() ?? '';
-    final ward = house['ward']?.toString() ?? '';
-    final rent = house['rentPrice']?.toString() ?? '0';
-    final type = house['type']?.toString() ?? '';
-    final images = house['images'] as List<dynamic>?;
-    final mainImage = images != null && images.isNotEmpty
-        ? images[0].toString()
-        : '';
-    final isActive = house['isActive'] == true;
-    final ownerName = house['ownerName']?.toString() ?? '';
-
-    final fullLocation = location.isNotEmpty
-        ? location
-        : region.isNotEmpty
-        ? '$region${district.isNotEmpty ? ', $district' : ''}${ward.isNotEmpty ? ', $ward' : ''}'
-        : '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: isDark
-            ? Border.all(color: const Color(0xFF26312D), width: 0.5)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.grey.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // House Image
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: mainImage.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          mainImage,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.home_rounded,
-                              color: primaryColor,
-                              size: 32,
-                            );
-                          },
-                        ),
-                      )
-                    : Icon(Icons.home_rounded, color: primaryColor, size: 32),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      fullLocation,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: subtextColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          isSwahili ? 'TSh $rent' : 'TSh $rent',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: primaryColor,
-                          ),
-                        ),
-                        if (type.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: primaryColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              type,
-                              style: GoogleFonts.poppins(
-                                color: primaryColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (ownerName.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        isSwahili ? 'Mwenye: $ownerName' : 'Owner: $ownerName',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: subtextColor,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? Colors.green.withValues(alpha: 0.1)
-                      : Colors.red.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  isActive
-                      ? isSwahili
-                            ? 'Inafanya kazi'
-                            : 'Active'
-                      : isSwahili
-                      ? 'Hafanyi kazi'
-                      : 'Inactive',
-                  style: GoogleFonts.poppins(
-                    color: isActive ? Colors.green : Colors.red,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.visibility_rounded, color: primaryColor),
-                onPressed: () => _showHouseDetails(
-                  house,
-                  isDark,
-                  primaryColor,
-                  textColor,
-                  subtextColor,
-                  isSwahili,
-                ),
-                tooltip: isSwahili ? 'Angalia' : 'View',
-              ),
-              IconButton(
-                icon: Icon(Icons.edit_rounded, color: primaryColor),
-                onPressed: () => _editHouse(
-                  house,
-                  isDark,
-                  primaryColor,
-                  textColor,
-                  subtextColor,
-                  isSwahili,
-                ),
-                tooltip: isSwahili ? 'Hariri' : 'Edit',
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.toggle_on_rounded,
-                  color: isActive ? Colors.red : Colors.green,
-                ),
-                onPressed: () =>
-                    _toggleHouseStatus(houseId, !isActive, isSwahili),
-                tooltip: isActive
-                    ? isSwahili
-                          ? 'Fungua'
-                          : 'Deactivate'
-                    : isSwahili
-                    ? 'Washa'
-                    : 'Activate',
-              ),
-              IconButton(
-                icon: Icon(Icons.delete_rounded, color: Colors.red),
-                onPressed: () => _deleteHouse(houseId, isSwahili),
-                tooltip: isSwahili ? 'Futa' : 'Delete',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVerificationContent(
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Quick Stats
-          Row(
-            children: [
-              Expanded(
-                child: _buildKPICard(
-                  Icons.pending_rounded,
-                  isSwahili ? 'Zinasubiri' : 'Pending',
-                  '${_verificationQueue?.length ?? 0}',
-                  isDark,
-                  Colors.orange,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKPICard(
-                  Icons.verified_rounded,
-                  isSwahili ? 'Zimeidhinishwa' : 'Verified',
-                  '${_dashboardData?['verifiedCount'] ?? 0}',
-                  isDark,
-                  Colors.green,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKPICard(
-                  Icons.cancel_rounded,
-                  isSwahili ? 'Zimekataliwa' : 'Rejected',
-                  '${_dashboardData?['rejectedCount'] ?? 0}',
-                  isDark,
-                  Colors.red,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // Verification Queue
-          if (_verificationQueue == null || _verificationQueue!.isEmpty)
-            Center(
-              child: Text(
-                isSwahili
-                    ? 'Hakuna ombi la uthibitishaji'
-                    : 'No verification requests',
-                style: GoogleFonts.poppins(color: subtextColor),
-              ),
-            )
-          else
-            ..._verificationQueue!.map((verification) {
-              return _buildVerificationCard(
-                verification,
-                isDark,
-                primaryColor,
-                cardColor,
-                textColor,
-                subtextColor,
-                isSwahili,
-              );
-            }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVerificationCard(
-    Map<String, dynamic> verification,
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    final userId =
-        verification['userId']?.toString() ??
-        verification['id']?.toString() ??
-        '';
-    final name =
-        verification['name']?.toString() ??
-        verification['fullName']?.toString() ??
-        'Unknown';
-    final email = verification['email']?.toString() ?? '';
-    final submittedAt =
-        verification['submittedAt']?.toString() ??
-        verification['createdAt']?.toString() ??
-        '';
-    final identityStatus =
-        verification['identityStatus']?.toString() ?? 'pending';
-    final propertyStatus =
-        verification['propertyStatus']?.toString() ?? 'pending';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: isDark
-            ? Border.all(color: const Color(0xFF26312D), width: 0.5)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.grey.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.pending_rounded,
-                  color: Colors.orange,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                    ),
-                    Text(
-                      email,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: subtextColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: identityStatus == 'verified'
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.orange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            isSwahili ? 'Utambulisho' : 'Identity',
-                            style: GoogleFonts.poppins(
-                              color: identityStatus == 'verified'
-                                  ? Colors.green
-                                  : Colors.orange,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: propertyStatus == 'verified'
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.orange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            isSwahili ? 'Mali' : 'Property',
-                            style: GoogleFonts.poppins(
-                              color: propertyStatus == 'verified'
-                                  ? Colors.green
-                                  : Colors.orange,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (submittedAt.isNotEmpty)
-                Text(
-                  _formatTimestamp(submittedAt),
-                  style: GoogleFonts.poppins(fontSize: 12, color: subtextColor),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _showVerificationDetails(
-                    verification,
-                    isDark,
-                    primaryColor,
-                    textColor,
-                    subtextColor,
-                    isSwahili,
-                  ),
-                  icon: const Icon(Icons.visibility_rounded),
-                  label: Text(isSwahili ? 'Angalia Maelezo' : 'View Details'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _approveVerification(userId, isSwahili),
-                  icon: const Icon(Icons.check_rounded),
-                  label: Text(isSwahili ? 'Idhinishisha' : 'Approve'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _rejectVerification(userId, isSwahili),
-                  icon: const Icon(Icons.close_rounded),
-                  label: Text(isSwahili ? 'Kataa' : 'Reject'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnalyticsContent(
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Analytics Overview
-          Row(
-            children: [
-              Expanded(
-                child: _buildKPICard(
-                  Icons.trending_up_rounded,
-                  isSwahili ? 'Watumiaji Wapya' : 'New Users',
-                  '${_newRegistrations?.length ?? 0}',
-                  isDark,
-                  Colors.blue,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKPICard(
-                  Icons.home_work_rounded,
-                  isSwahili ? 'Nyumba Mpya' : 'New Houses',
-                  '${_dashboardData?['newHouses'] ?? 0}',
-                  isDark,
-                  Colors.green,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKPICard(
-                  Icons.verified_rounded,
-                  isSwahili ? 'Uthibitishaji' : 'Verifications',
-                  '${_dashboardData?['verifiedCount'] ?? 0}',
-                  isDark,
-                  Colors.purple,
-                  cardColor,
-                  textColor,
-                  subtextColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // New Registrations List
-          _buildSectionCard(
-            Icons.person_add_rounded,
-            isSwahili ? 'Watumiaji Wapya' : 'New Registrations',
-            _buildNewRegistrationsList(
-              isDark,
-              primaryColor,
-              textColor,
-              subtextColor,
-              isSwahili,
-            ),
-            isDark,
-            cardColor,
-            textColor,
-            subtextColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNewRegistrationsList(
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    if (_newRegistrations == null || _newRegistrations!.isEmpty) {
-      return Center(
-        child: Text(
-          isSwahili ? 'Hakuna usajili mpya' : 'No new registrations',
-          style: GoogleFonts.poppins(color: subtextColor),
-        ),
-      );
-    }
-
-    return Column(
-      children: _newRegistrations!.take(5).map((user) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.person_add_rounded,
-                  color: Colors.blue,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user['name']?.toString() ??
-                          user['firstName']?.toString() ??
-                          'Unknown',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      user['email']?.toString() ?? '',
-                      style: GoogleFonts.poppins(
-                        color: subtextColor,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                _formatTimestamp(user['createdAt']?.toString() ?? ''),
-                style: GoogleFonts.poppins(color: subtextColor, fontSize: 12),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildSettingsContent(
-    bool isDark,
-    Color primaryColor,
-    Color cardColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.settings_rounded, size: 64, color: subtextColor),
-          const SizedBox(height: 16),
-          Text(
-            isSwahili ? 'Mipangilio' : 'Settings',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isSwahili ? 'Hali ya kazi...' : 'Coming soon...',
-            style: GoogleFonts.poppins(color: subtextColor),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==================== User Management Actions ====================
-
-  Future<void> _showUserDetails(
-    Map<String, dynamic> user,
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) async {
-    final userId = user['id']?.toString() ?? '';
-    final details = await ApiService.getUserDetails(userId);
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Maelezo ya Mtumiaji' : 'User Details'),
-        content: SingleChildScrollView(
-          child: details != null
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildDetailRow(
-                      isSwahili ? 'Jina' : 'Name',
-                      details['name']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Barua pepe' : 'Email',
-                      details['email']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Namba ya simu' : 'Phone',
-                      details['phone']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Jukumu' : 'Role',
-                      details['role']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Imeidhinishwa' : 'Verified',
-                      details['isVerified'] == true ? 'Yes' : 'No',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Imekataliwa' : 'Banned',
-                      details['isBanned'] == true ? 'Yes' : 'No',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Imejiandikwa' : 'Registered',
-                      details['createdAt']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                  ],
-                )
-              : Text(
-                  isSwahili
-                      ? 'Imeshindika kupata maelezo'
-                      : 'Failed to load details',
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isSwahili ? 'Funga' : 'Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(
-    String label,
-    String value,
-    Color textColor,
-    Color subtextColor,
-  ) {
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: const Color(0xFF0F8B61).withValues(alpha: 0.1),
+            child: Text(
+              name.substring(0, 1).toUpperCase(),
+              style: GoogleFonts.poppins(
+                color: const Color(0xFF0F8B61),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  email,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: subtextColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: role == 'admin' 
+                  ? Colors.red.withValues(alpha: 0.1)
+                  : role == 'landlord'
+                      ? Colors.green.withValues(alpha: 0.1)
+                      : Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              role.toUpperCase(),
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: role == 'admin' 
+                    ? Colors.red
+                    : role == 'landlord'
+                        ? Colors.green
+                        : Colors.blue,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentHousesSection(
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+    AppLocalizations l10n,
+  ) {
+    final recentHouses = _houses?.take(5).toList() ?? [];
+    
+    if (recentHouses.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: const EmptyState(
+          title: 'No recent houses',
+          subtitle: 'New property listings will appear here',
+          icon: Icons.home_outlined,
+        ),
+      );
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.tr('Nyumba za Hivi Karibini', en: 'Recent Houses'),
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+              Text(
+                l10n.tr('Ona Zote', en: 'View All'),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF0F8B61),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...recentHouses.map((house) => _buildHouseListItem(house, isDark, textColor, subtextColor)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHouseListItem(dynamic house, bool isDark, Color textColor, Color subtextColor) {
+    final title = house['title']?.toString() ?? house['brandName']?.toString() ?? 'Unknown';
+    final location = house['location']?.toString() ?? '';
+    final price = house['price']?.toString() ?? house['rent']?.toString() ?? '0';
+    final houseId = house['id']?.toString();
+
+    return InkWell(
+      onTap: houseId != null ? () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminHouseDetailsPage(houseId: houseId),
+          ),
+        );
+      } : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F8B61).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.home_outlined, color: Color(0xFF0F8B61)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                  Text(
+                    location,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: subtextColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              'TZS $price',
               style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF0F8B61),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUsersTab(
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+    Color primaryColor,
+    AppLocalizations l10n,
+  ) {
+    final filteredUsers = _allUsers?.where((user) {
+      final name = user['name']?.toString().toLowerCase() ?? '';
+      final email = user['email']?.toString().toLowerCase() ?? '';
+      return name.contains(_userSearchQuery.toLowerCase()) || 
+             email.contains(_userSearchQuery.toLowerCase());
+    }).toList() ?? [];
+
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF21262D) : const Color(0xFFF6F8FA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.search, color: subtextColor),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) => setState(() => _userSearchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: l10n.tr('Tafuta watumiaji...', en: 'Search users...'),
+                      hintStyle: GoogleFonts.poppins(color: subtextColor),
+                      border: InputBorder.none,
+                    ),
+                    style: GoogleFonts.poppins(color: textColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // Users list
+        Expanded(
+          child: filteredUsers.isEmpty
+              ? Center(
+                  child: Text(
+                    l10n.tr('Hakuna watumiaji waliopatikana', en: 'No users found'),
+                    style: GoogleFonts.poppins(color: subtextColor),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    return _buildUserListItem(filteredUsers[index], isDark, textColor, subtextColor);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHousesTab(
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+    Color primaryColor,
+    AppLocalizations l10n,
+  ) {
+    final filteredHouses = _houses?.where((house) {
+      final title = house['title']?.toString().toLowerCase() ?? house['brandName']?.toString().toLowerCase() ?? '';
+      final location = house['location']?.toString().toLowerCase() ?? '';
+      return title.contains(_houseSearchQuery.toLowerCase()) || 
+             location.contains(_houseSearchQuery.toLowerCase());
+    }).toList() ?? [];
+
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF21262D) : const Color(0xFFF6F8FA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.search, color: subtextColor),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) => setState(() => _houseSearchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: l10n.tr('Tafuta nyumba...', en: 'Search houses...'),
+                      hintStyle: GoogleFonts.poppins(color: subtextColor),
+                      border: InputBorder.none,
+                    ),
+                    style: GoogleFonts.poppins(color: textColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // Houses list
+        Expanded(
+          child: filteredHouses.isEmpty
+              ? Center(
+                  child: Text(
+                    l10n.tr('Hakuna nyumba zilizopatikana', en: 'No houses found'),
+                    style: GoogleFonts.poppins(color: subtextColor),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: filteredHouses.length,
+                  itemBuilder: (context, index) {
+                    return _buildHouseListItem(filteredHouses[index], isDark, textColor, subtextColor);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVerificationsTab(
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+    Color primaryColor,
+    AppLocalizations l10n,
+  ) {
+    return _verificationQueue == null || _verificationQueue!.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.verified_user_outlined, size: 64, color: subtextColor),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.tr('Hakuna uthibitishaji unazosubiri', en: 'No pending verifications'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: subtextColor,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: _verificationQueue!.length,
+            itemBuilder: (context, index) {
+              return _buildVerificationCard(_verificationQueue![index], isDark, cardColor, textColor, subtextColor, borderColor, primaryColor);
+            },
+          );
+  }
+
+  Widget _buildVerificationCard(
+    Map<String, dynamic> request,
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
+    Color primaryColor,
+  ) {
+    final id = request['id']?.toString() ?? '';
+    final fullName = request['full_name']?.toString() ?? 'Unknown';
+    final ninNumber = request['nin_number']?.toString() ?? 'Not provided';
+    final status = request['status']?.toString() ?? 'pending';
+    final propertyVerification = request['property_verification'] as Map<String, dynamic>?;
+    
+    // Parse photo URLs
+    String? idPhotoUrl;
+    String? selfiePhotoUrl;
+    
+    try {
+      if (request['id_photo_url'] != null) {
+        final idPhotoJson = request['id_photo_url'] is String 
+            ? jsonDecode(request['id_photo_url']) 
+            : request['id_photo_url'];
+        idPhotoUrl = idPhotoJson['url']?.toString();
+      }
+      if (request['selfie_photo_url'] != null) {
+        final selfieJson = request['selfie_photo_url'] is String 
+            ? jsonDecode(request['selfie_photo_url']) 
+            : request['selfie_photo_url'];
+        selfiePhotoUrl = selfieJson['url']?.toString();
+      }
+    } catch (e) {
+      debugPrint('Error parsing photo URLs: $e');
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: status == 'pending' ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : borderColor,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with status
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName,
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                    ),
+                    Text(
+                      'NIN: $ninNumber',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: subtextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: status == 'pending' 
+                      ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
+                      : Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: status == 'pending' ? const Color(0xFFF59E0B) : Colors.green,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Photos row
+          Row(
+            children: [
+              if (idPhotoUrl != null)
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: idPhotoUrl,
+                      height: 120,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        height: 120,
+                        color: primaryColor.withValues(alpha: 0.1),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        height: 120,
+                        color: primaryColor.withValues(alpha: 0.1),
+                        child: const Icon(Icons.error),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(child: Icon(Icons.credit_card, color: Color(0xFF0F8B61))),
+                  ),
+                ),
+              const SizedBox(width: 12),
+              if (selfiePhotoUrl != null)
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: selfiePhotoUrl,
+                      height: 120,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        height: 120,
+                        color: primaryColor.withValues(alpha: 0.1),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        height: 120,
+                        color: primaryColor.withValues(alpha: 0.1),
+                        child: const Icon(Icons.error),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(child: Icon(Icons.face, color: Color(0xFF0F8B61))),
+                  ),
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Property verification section (if exists)
+          if (propertyVerification != null) ...[
+            Container(
+              height: 1,
+              color: borderColor,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            Text(
+              'Property Documents',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: textColor,
               ),
             ),
-          ),
-          Expanded(
-            child: Text(value, style: GoogleFonts.poppins(color: subtextColor)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _editUser(
-    Map<String, dynamic> user,
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) async {
-    final userId = user['id']?.toString() ?? '';
-    final nameController = TextEditingController(
-      text: user['name']?.toString() ?? '',
-    );
-    final emailController = TextEditingController(
-      text: user['email']?.toString() ?? '',
-    );
-    final roleController = TextEditingController(
-      text: user['role']?.toString() ?? 'normal',
-    );
-
-    if (!mounted) return;
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Hariri Mtumiaji' : 'Edit User'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: isSwahili ? 'Jina' : 'Name',
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF21262D) : const Color(0xFFF6F8FA),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (propertyVerification['address'] != null)
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 16, color: Color(0xFF0F8B61)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            propertyVerification['address'].toString(),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: textColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (propertyVerification['property_photos'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.photo_library, size: 16, color: Color(0xFF0F8B61)),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${propertyVerification['property_photos'].length} photos',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: subtextColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(
-                labelText: isSwahili ? 'Barua pepe' : 'Email',
-              ),
-            ),
-            TextField(
-              controller: roleController,
-              decoration: InputDecoration(
-                labelText: isSwahili ? 'Jukumu' : 'Role',
-              ),
-            ),
+            const SizedBox(height: 16),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context, {
-                'name': nameController.text,
-                'email': emailController.text,
-                'role': roleController.text,
-              });
-            },
-            child: Text(isSwahili ? 'Hifadhi' : 'Save'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null) {
-      final success = await ApiService.updateUser(userId, result);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa kuhariri'
-                      : 'User updated successfully'
-                : isSwahili
-                ? 'Imeshindika kuhariri'
-                : 'Failed to update user',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
-      }
-    }
-  }
-
-  Future<void> _banUser(String userId, bool isSwahili) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Ban Mtumiaji?' : 'Ban User?'),
-        content: Text(
-          isSwahili
-              ? 'Una uhakika unataka kumban mtumiaji huyu?'
-              : 'Are you sure you want to ban this user?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isSwahili ? 'Ban' : 'Ban'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final success = await ApiService.banUser(userId);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa kuban'
-                      : 'User banned successfully'
-                : isSwahili
-                ? 'Imeshindika kuban'
-                : 'Failed to ban user',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
-      }
-    }
-  }
-
-  Future<void> _unbanUser(String userId, bool isSwahili) async {
-    final success = await ApiService.unbanUser(userId);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? isSwahili
-                    ? 'Imefanikiwa kuondoa ban'
-                    : 'User unbanned successfully'
-              : isSwahili
-              ? 'Imeshindika kuondoa ban'
-              : 'Failed to unban user',
-        ),
-        backgroundColor: success ? Colors.green : Colors.red,
-      ),
-    );
-
-    if (success) {
-      _loadDashboardData();
-    }
-  }
-
-  Future<void> _deleteUser(String userId, bool isSwahili) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Futa Mtumiaji?' : 'Delete User?'),
-        content: Text(
-          isSwahili
-              ? 'Hatari! Hii hatowezi kuundoa. Una uhakika?'
-              : 'Warning! This cannot be undone. Are you sure?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isSwahili ? 'Futa' : 'Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final success = await ApiService.deleteUser(userId);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa kufuta'
-                      : 'User deleted successfully'
-                : isSwahili
-                ? 'Imeshindika kufuta'
-                : 'Failed to delete user',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
-      }
-    }
-  }
-
-  // ==================== House Management Actions ====================
-
-  Future<void> _showHouseDetails(
-    Map<String, dynamic> house,
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) async {
-    final houseId = house['id']?.toString() ?? '';
-    final details = await ApiService.getHouseDetailsAdmin(houseId);
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Maelezo ya Nyumba' : 'House Details'),
-        content: SingleChildScrollView(
-          child: details != null
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildDetailRow(
-                      isSwahili ? 'Jina' : 'Name',
-                      details['brandName']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Eneo' : 'Location',
-                      details['location']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Kodi' : 'Rent',
-                      details['rentPrice']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Aina' : 'Type',
-                      details['type']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Inafanya kazi' : 'Active',
-                      details['isActive'] == true ? 'Yes' : 'No',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Picha' : 'Images',
-                      '${(details['images'] as List<dynamic>?)?.length ?? 0}',
-                      textColor,
-                      subtextColor,
-                    ),
-                  ],
-                )
-              : Text(
-                  isSwahili
-                      ? 'Imeshindika kupata maelezo'
-                      : 'Failed to load details',
+          
+          const SizedBox(height: 16),
+          
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _viewVerificationDetails(id),
+                  icon: const Icon(Icons.visibility, size: 16),
+                  label: const Text('View'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: primaryColor,
+                    side: BorderSide(color: primaryColor),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                 ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isSwahili ? 'Funga' : 'Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _editHouse(
-    Map<String, dynamic> house,
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) async {
-    final houseId = house['id']?.toString() ?? '';
-    final titleController = TextEditingController(
-      text: house['brandName']?.toString() ?? '',
-    );
-    final rentController = TextEditingController(
-      text: house['rentPrice']?.toString() ?? '',
-    );
-
-    if (!mounted) return;
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Hariri Nyumba' : 'Edit House'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: InputDecoration(
-                labelText: isSwahili ? 'Jina la Nyumba' : 'House Name',
               ),
-            ),
-            TextField(
-              controller: rentController,
-              decoration: InputDecoration(
-                labelText: isSwahili ? 'Kodi' : 'Rent',
-              ),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context, {
-                'brandName': titleController.text,
-                'rentPrice': rentController.text,
-              });
-            },
-            child: Text(isSwahili ? 'Hifadhi' : 'Save'),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null) {
-      final success = await ApiService.updateAdminHouse(houseId, result);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa kuhariri'
-                      : 'House updated successfully'
-                : isSwahili
-                ? 'Imeshindika kuhariri'
-                : 'Failed to update house',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
-      }
-    }
-  }
-
-  Future<void> _toggleHouseStatus(
-    String houseId,
-    bool newStatus,
-    bool isSwahili,
-  ) async {
-    final success = await ApiService.updateAdminHouse(houseId, {
-      'isActive': newStatus,
-    });
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? isSwahili
-                    ? 'Imefanikiwa kubadili status'
-                    : 'House status updated successfully'
-              : isSwahili
-              ? 'Imeshindika kubadili status'
-              : 'Failed to update house status',
-        ),
-        backgroundColor: success ? Colors.green : Colors.red,
-      ),
-    );
-
-    if (success) {
-      _loadDashboardData();
-    }
-  }
-
-  Future<void> _deleteHouse(String houseId, bool isSwahili) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Futa Nyumba?' : 'Delete House?'),
-        content: Text(
-          isSwahili
-              ? 'Hatari! Hii hatowezi kuundoa. Una uhakika?'
-              : 'Warning! This cannot be undone. Are you sure?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isSwahili ? 'Futa' : 'Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final success = await ApiService.deleteAdminHouse(houseId);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa kufuta'
-                      : 'House deleted successfully'
-                : isSwahili
-                ? 'Imeshindika kufuta'
-                : 'Failed to delete house',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
-      }
-    }
-  }
-
-  // ==================== Verification Actions ====================
-
-  Future<void> _showVerificationDetails(
-    Map<String, dynamic> verification,
-    bool isDark,
-    Color primaryColor,
-    Color textColor,
-    Color subtextColor,
-    bool isSwahili,
-  ) async {
-    final userId =
-        verification['userId']?.toString() ??
-        verification['id']?.toString() ??
-        '';
-    final details = await ApiService.getVerificationDetails(userId);
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          isSwahili ? 'Maelezo ya Uthibitishaji' : 'Verification Details',
-        ),
-        content: SingleChildScrollView(
-          child: details != null
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildDetailRow(
-                      isSwahili ? 'Jina kamili' : 'Full Name',
-                      details['fullName']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
+              const SizedBox(width: 12),
+              if (status == 'pending')
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _approveVerification(id),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Approve'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    _buildDetailRow(
-                      isSwahili ? 'Barua pepe' : 'Email',
-                      details['email']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Namba ya NIDA' : 'NIDA Number',
-                      details['ninNumber']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Status ya utambulisho' : 'Identity Status',
-                      details['identityStatus']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    _buildDetailRow(
-                      isSwahili ? 'Status ya mali' : 'Property Status',
-                      details['propertyStatus']?.toString() ?? 'N/A',
-                      textColor,
-                      subtextColor,
-                    ),
-                    const SizedBox(height: 16),
-                    if (details['idPhoto'] != null)
-                      _buildDocumentButton(
-                        isSwahili ? 'Picha ya Kitambulisho' : 'ID Photo',
-                        details['idPhoto'].toString(),
-                        primaryColor,
-                        isSwahili,
-                      ),
-                    if (details['selfie'] != null)
-                      _buildDocumentButton(
-                        isSwahili ? 'Selfie' : 'Selfie',
-                        details['selfie'].toString(),
-                        primaryColor,
-                        isSwahili,
-                      ),
-                    if (details['idDocument'] != null)
-                      _buildDocumentButton(
-                        isSwahili ? 'Hati ya Kitambulisho' : 'ID Document',
-                        details['idDocument'].toString(),
-                        primaryColor,
-                        isSwahili,
-                      ),
-                  ],
-                )
-              : Text(
-                  isSwahili
-                      ? 'Imeshindika kupata maelezo'
-                      : 'Failed to load details',
+                  ),
                 ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isSwahili ? 'Funga' : 'Close'),
+              const SizedBox(width: 12),
+              if (status == 'pending')
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _rejectVerification(id),
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Reject'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDocumentButton(
-    String label,
-    String url,
+  Widget _buildBottomNavigation(
+    bool isDark,
     Color primaryColor,
-    bool isSwahili,
+    Color textColor,
+    Color subtextColor,
+    Color borderColor,
   ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: ElevatedButton.icon(
-        onPressed: () => _launchUrl(url),
-        icon: const Icon(Icons.download_rounded),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161B22) : Colors.white,
+        border: Border(
+          top: BorderSide(color: borderColor, width: 1),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                0,
+                Icons.dashboard_outlined,
+                'Dashboard',
+                isDark,
+                primaryColor,
+                textColor,
+                subtextColor,
+              ),
+              _buildNavItem(
+                1,
+                Icons.people_outline,
+                'Users',
+                isDark,
+                primaryColor,
+                textColor,
+                subtextColor,
+              ),
+              _buildNavItem(
+                2,
+                Icons.home_outlined,
+                'Houses',
+                isDark,
+                primaryColor,
+                textColor,
+                subtextColor,
+              ),
+              _buildNavItem(
+                3,
+                Icons.verified_user_outlined,
+                'Verifications',
+                isDark,
+                primaryColor,
+                textColor,
+                subtextColor,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+  Widget _buildNavItem(
+    int index,
+    IconData icon,
+    String label,
+    bool isDark,
+    Color primaryColor,
+    Color textColor,
+    Color subtextColor,
+  ) {
+    final isSelected = _selectedIndex == index;
+    
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected 
+                ? primaryColor.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? primaryColor : subtextColor,
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected ? primaryColor : subtextColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewVerificationDetails(String verificationId) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('View verification: $verificationId')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error viewing verification')),
+      );
     }
   }
 
-  Future<void> _approveVerification(String userId, bool isSwahili) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _approveVerification(String verificationId) async {
+    try {
+      final success = await ApiService.approveVerification(verificationId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Verification approved' : 'Failed to approve'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
+      if (success) _loadDashboardData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error approving verification')),
+      );
+    }
+  }
+
+  Future<void> _rejectVerification(String verificationId) async {
+    try {
+      final success = await ApiService.rejectVerification(verificationId, 'Rejected by admin');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Verification rejected' : 'Failed to reject'),
+          backgroundColor: success ? Colors.orange : Colors.red,
+        ),
+      );
+      if (success) _loadDashboardData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error rejecting verification')),
+      );
+    }
+  }
+
+  Future<void> _showLogoutDialog() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          isSwahili ? 'Idhinishisha Uthibitishaji?' : 'Approve Verification?',
-        ),
-        content: Text(
-          isSwahili
-              ? 'Una uhakika unataka ku-idhinishisha uthibitishaji huu?'
-              : 'Are you sure you want to approve this verification?',
-        ),
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
+            child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: Text(isSwahili ? 'Idhinishisha' : 'Approve'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final success = await ApiService.approveVerification(userId);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa ku-idhinishisha'
-                      : 'Verification approved successfully'
-                : isSwahili
-                ? 'Imeshindika ku-idhinishisha'
-                : 'Failed to approve verification',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
-      }
-    }
-  }
-
-  Future<void> _rejectVerification(String userId, bool isSwahili) async {
-    final reasonController = TextEditingController();
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isSwahili ? 'Kataa Uthibitishaji' : 'Reject Verification'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: reasonController,
-              decoration: InputDecoration(
-                labelText: isSwahili
-                    ? 'Sababu ya kukataa'
-                    : 'Reason for rejection',
-                hintText: isSwahili ? 'Andika sababu...' : 'Enter reason...',
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isSwahili ? 'Ghairi' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, reasonController.text),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isSwahili ? 'Kataa' : 'Reject'),
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Logout'),
           ),
         ],
       ),
     );
 
-    if (result != null && result.isNotEmpty) {
-      final success = await ApiService.rejectVerification(userId, result);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? isSwahili
-                      ? 'Imefanikiwa kukataa'
-                      : 'Verification rejected successfully'
-                : isSwahili
-                ? 'Imeshindika kukataa'
-                : 'Failed to reject verification',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (success) {
-        _loadDashboardData();
+    if (confirm == true && mounted) {
+      await authProvider.logout();
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/');
       }
     }
   }

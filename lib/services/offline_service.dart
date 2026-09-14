@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:serik/model/house_data.dart';
 import 'package:serik/model/rental_model.dart';
@@ -33,7 +34,7 @@ class OfflineService {
         _lastSyncTime = DateTime.tryParse(lastSyncStr);
       }
     } catch (e) {
-      print('Error initializing offline service: $e');
+      debugPrint('Error initializing offline service: $e');
     }
   }
   
@@ -45,9 +46,9 @@ class OfflineService {
       await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
       _hasCachedData = true;
       _lastSyncTime = DateTime.now();
-      print('Houses cached successfully for offline use');
+      debugPrint('Houses cached successfully for offline use');
     } catch (e) {
-      print('Error caching houses: $e');
+      debugPrint('Error caching houses: $e');
     }
   }
   
@@ -64,7 +65,7 @@ class OfflineService {
       }
       return [];
     } catch (e) {
-      print('Error getting cached houses: $e');
+      debugPrint('Error getting cached houses: $e');
       return [];
     }
   }
@@ -78,7 +79,7 @@ class OfflineService {
         return RentalSpot.fromHouseData(houseData);
       }).toList();
     } catch (e) {
-      print('Error converting cached houses to rental spots: $e');
+      debugPrint('Error converting cached houses to rental spots: $e');
       return [];
     }
   }
@@ -89,9 +90,9 @@ class OfflineService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_offlineModeKey, offline);
       _isOfflineMode = offline;
-      print('Offline mode set to: $offline');
+      debugPrint('Offline mode set to: $offline');
     } catch (e) {
-      print('Error setting offline mode: $e');
+      debugPrint('Error setting offline mode: $e');
     }
   }
   
@@ -103,9 +104,9 @@ class OfflineService {
       await prefs.remove(_lastSyncKey);
       _hasCachedData = false;
       _lastSyncTime = null;
-      print('Cache cleared successfully');
+      debugPrint('Cache cleared successfully');
     } catch (e) {
-      print('Error clearing cache: $e');
+      debugPrint('Error clearing cache: $e');
     }
   }
   

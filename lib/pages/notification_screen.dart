@@ -48,6 +48,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _refresh() async {
+    // Prevent overlapping refresh requests
     setState(() {
       _notificationsFuture = ApiService.getNotifications();
     });
@@ -175,7 +176,30 @@ class _NotificationScreenState extends State<NotificationScreen> {
     });
   }
 
-  IconData _getNotificationIcon(String title, String body) {
+  IconData _getNotificationIcon(String type, String title, String body) {
+    // Use structured type field first, fallback to text analysis
+    final typeLower = type.toLowerCase();
+    
+    if (typeLower.contains('verification') || typeLower.contains('identity') || typeLower.contains('property')) {
+      return Icons.verified_user_rounded;
+    }
+    if (typeLower.contains('payment') || typeLower.contains('rent')) {
+      return Icons.payments_rounded;
+    }
+    if (typeLower.contains('approve') || typeLower.contains('reject')) {
+      return Icons.assignment_turned_in_rounded;
+    }
+    if (typeLower.contains('maintenance') || typeLower.contains('repair')) {
+      return Icons.build_rounded;
+    }
+    if (typeLower.contains('security') || typeLower.contains('alert')) {
+      return Icons.security_rounded;
+    }
+    if (typeLower.contains('house') || typeLower.contains('property')) {
+      return Icons.home_rounded;
+    }
+    
+    // Fallback to text analysis
     final combined = '$title $body'.toLowerCase();
     if (combined.contains('uthibitishaji') ||
         combined.contains('verification') ||
@@ -203,7 +227,30 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return Icons.home_work_rounded;
   }
 
-  Color _getNotificationColor(String title, String body) {
+  Color _getNotificationColor(String type, String title, String body) {
+    // Use structured type field first, fallback to text analysis
+    final typeLower = type.toLowerCase();
+    
+    if (typeLower.contains('verification') || typeLower.contains('identity') || typeLower.contains('property')) {
+      return const Color(0xFF8B5CF6);
+    }
+    if (typeLower.contains('payment') || typeLower.contains('rent')) {
+      return const Color(0xFF2457D6);
+    }
+    if (typeLower.contains('approve')) {
+      return const Color(0xFF4CAF50);
+    }
+    if (typeLower.contains('reject')) {
+      return const Color(0xFFEF4444);
+    }
+    if (typeLower.contains('security') || typeLower.contains('alert')) {
+      return const Color(0xFFF59E0B);
+    }
+    if (typeLower.contains('house') || typeLower.contains('property')) {
+      return const Color(0xFF10B981);
+    }
+    
+    // Fallback to text analysis
     final combined = '$title $body'.toLowerCase();
     if (combined.contains('uthibitishaji') ||
         combined.contains('verification') ||
@@ -474,8 +521,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                   '')
                               .toString()
                               .toLowerCase();
-                      final notifIcon = _getNotificationIcon(title, body);
-                      final notifColor = _getNotificationColor(title, body);
+                      final notifIcon = _getNotificationIcon(item['type']?.toString() ?? '', title, body);
+                      final notifColor = _getNotificationColor(item['type']?.toString() ?? '', title, body);
                       final notificationId = item['id']?.toString();
                       final isRead = item['read'] == true;
 

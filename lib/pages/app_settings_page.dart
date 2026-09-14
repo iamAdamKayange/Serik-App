@@ -79,9 +79,11 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
                 // Preferences Section
                 _SectionHeader(
                   title: l10n.tr('Preferences', en: 'Preferences'),
@@ -263,7 +265,8 @@ class _AppSettingsPageState extends State<AppSettingsPage> {
                   primary: primary,
                 ),
               ],
-            ),
+          ),
+        ),
     );
   }
 

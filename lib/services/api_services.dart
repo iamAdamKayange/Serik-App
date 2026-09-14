@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:async';
-import 'dart:convert' as convert;
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -34,16 +33,91 @@ class ApiService {
   static const _notificationInstallCutoffKey =
       'notification_install_cutoff_at';
 
+  // Cache duration constants
+  // ignore: unused_field
+  static const _cacheDurationShort = Duration(minutes: 5);
+  // ignore: unused_field
+  static const _cacheDurationMedium = Duration(minutes: 15);
+  // ignore: unused_field
+  static const _cacheDurationLong = Duration(hours: 1);
+
   static String _houseDetailCacheKey(String id) => '$_houseDetailCachePrefix$id';
 
   static String _smartAlertPrefsCacheKey(String token) =>
       '$_smartAlertPrefsPrefix${token.hashCode}';
 
+  // Generic cache management
+  // ignore: unused_element
+  static Future<void> _setCache(String key, dynamic data, Duration duration) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheData = {
+        'data': data,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'duration': duration.inMilliseconds,
+      };
+      await prefs.setString(key, jsonEncode(cacheData));
+    } catch (e) {
+      debugPrint('Cache set error: $e');
+    }
+  }
+
+  // ignore: unused_element
+  static Future<T?> _getCache<T>(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(key);
+      if (cached == null) return null;
+
+      final cacheData = jsonDecode(cached) as Map<String, dynamic>;
+      final timestamp = cacheData['timestamp'] as int;
+      final duration = cacheData['duration'] as int;
+
+      if (DateTime.now().millisecondsSinceEpoch - timestamp > duration) {
+        await prefs.remove(key);
+        return null;
+      }
+
+      return cacheData['data'] as T;
+    } catch (e) {
+      debugPrint('Cache get error: $e');
+      return null;
+    }
+  }
+
+  // ignore: unused_element
+  static Future<void> _clearCache(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    } catch (e) {
+      debugPrint('Cache clear error: $e');
+    }
+  }
+
+  // Clear all API cache
+  static Future<void> clearAllCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_housesCacheKey);
+      await prefs.remove(_videoFeedCacheKey);
+      await prefs.remove(_notificationsCacheKey);
+      await prefs.remove(_myHousesCacheKey);
+      debugPrint('All API cache cleared');
+    } catch (e) {
+      debugPrint('Cache clear error: $e');
+    }
+  }
+
   static Future<Map<String, String>> _getHeaders() async {
     final token = await _storage.read(key: 'auth_token');
+    final prefs = await SharedPreferences.getInstance();
+    final language = prefs.getString('app_locale') ?? 'sw';
+    
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Accept-Language': language,
       'X-App-Version': '1.0.0',
       'X-Platform': 'mobile',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -157,6 +231,7 @@ class ApiService {
     String? lastName,
     String? phone,
     XFile? avatarFile,
+    String? preferredLanguage,
   }) async {
     try {
       final url = Uri.parse('$baseUrl$apiPrefix/auth/me');
@@ -170,6 +245,7 @@ class ApiService {
                 if (firstName != null) 'firstName': firstName,
                 if (lastName != null) 'lastName': lastName,
                 if (phone != null) 'phone': phone,
+                if (preferredLanguage != null) 'preferredLanguage': preferredLanguage,
               }),
             )
             .timeout(timeout);
@@ -189,6 +265,7 @@ class ApiService {
       if (firstName != null) request.fields['firstName'] = firstName;
       if (lastName != null) request.fields['lastName'] = lastName;
       if (phone != null) request.fields['phone'] = phone;
+      if (preferredLanguage != null) request.fields['preferredLanguage'] = preferredLanguage;
 
       final mimeType = lookupMimeType(avatarFile.path);
       final mediaType = mimeType != null ? MediaType.parse(mimeType) : null;
@@ -219,6 +296,29 @@ class ApiService {
   static Future<void> logout() async {
     debugPrint('🔓 Logging out');
     await _storage.delete(key: 'auth_token');
+  }
+
+  /// Update user's preferred language
+  static Future<bool> updateLanguage(String language) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/auth/me/language');
+      final headers = await _getHeaders();
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: jsonEncode({'preferredLanguage': language}),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        debugPrint('✅ Language updated to $language');
+        return true;
+      }
+      debugPrint('⚠️ Language update failed: ${response.statusCode}');
+      return false;
+    } catch (e) {
+      debugPrint('❌ updateLanguage error: $e');
+      return false;
+    }
   }
 
   // ==================== ADMIN ====================
@@ -426,6 +526,23 @@ class ApiService {
     }
   }
 
+  /// Get all houses with pagination for better performance
+  static Future<List<dynamic>> getAllHousesPaginated({int limit = 50, int offset = 0}) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/houses?limit=$limit&offset=$offset');
+      final headers = await _getHeaders();
+      final response = await http.get(url, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('getAllHousesPaginated error: $e');
+      return [];
+    }
+  }
+
   /// Get house details (admin only)
   static Future<Map<String, dynamic>?> getHouseDetailsAdmin(String houseId) async {
     try {
@@ -440,6 +557,76 @@ class ApiService {
     } catch (e) {
       debugPrint('getHouseDetailsAdmin error: $e');
       return null;
+    }
+  }
+
+  /// Approve house (admin only)
+  static Future<bool> approveHouse(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId/approve');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('approveHouse error: $e');
+      return false;
+    }
+  }
+
+  /// Reject house (admin only)
+  static Future<bool> rejectHouse(String houseId, String reason) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId/reject');
+      final headers = await _getHeaders();
+      final body = jsonEncode({'reason': reason});
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: body,
+      ).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('rejectHouse error: $e');
+      return false;
+    }
+  }
+
+  /// Hide house (admin only)
+  static Future<bool> hideHouseAdmin(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId/hide');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('hideHouseAdmin error: $e');
+      return false;
+    }
+  }
+
+  /// Unhide house (admin only)
+  static Future<bool> unhideHouseAdmin(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId/unhide');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('unhideHouseAdmin error: $e');
+      return false;
+    }
+  }
+
+  /// Delete house (admin only)
+  static Future<bool> deleteHouseAdmin(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/admin/houses/$houseId');
+      final headers = await _getHeaders();
+      final response = await http.delete(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('deleteHouseAdmin error: $e');
+      return false;
     }
   }
 
@@ -805,8 +992,8 @@ class ApiService {
     if (parts.length != 3) return {};
     final payload = parts[1];
     final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
-    final decoded = convert.base64.decode(normalized);
-    return jsonDecode(convert.utf8.decode(decoded));
+    final decoded = base64.decode(normalized);
+    return jsonDecode(utf8.decode(decoded));
   }
 
   static Future<bool> deleteNotification(String notificationId) async {
@@ -1078,6 +1265,45 @@ class ApiService {
     }
   }
 
+  /// Hide own house (landlord only)
+  static Future<bool> hideHouse(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/houses/$houseId/hide');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('hideHouse error: $e');
+      return false;
+    }
+  }
+
+  /// Unhide own house (landlord only)
+  static Future<bool> unhideHouse(String houseId) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/houses/$houseId/unhide');
+      final headers = await _getHeaders();
+      final response = await http.post(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('unhideHouse error: $e');
+      return false;
+    }
+  }
+
+  /// Delete own house (landlord only)
+  static Future<bool> deleteHouse(String id) async {
+    try {
+      final url = Uri.parse('$baseUrl$apiPrefix/houses/$id');
+      final headers = await _getHeaders();
+      final response = await http.delete(url, headers: headers).timeout(timeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('deleteHouse error: $e');
+      return false;
+    }
+  }
+
   /// Create a new house (landlord only)
   static Future<Map<String, dynamic>?> createHouse(
     Map<String, dynamic> houseData,
@@ -1132,29 +1358,6 @@ class ApiService {
     } catch (e) {
       debugPrint('❌ updateHouse error: $e');
       return null;
-    }
-  }
-
-  /// Delete house (landlord only)
-  static Future<bool> deleteHouse(String id) async {
-    try {
-      final url = Uri.parse('$baseUrl$apiPrefix/houses/$id');
-      final headers = await _getHeaders();
-      final response = await http
-          .delete(url, headers: headers)
-          .timeout(timeout);
-      final ok = response.statusCode == 200;
-      if (ok) {
-        await _clearHouseCaches(houseId: id);
-        RealtimeService.instance.emit('house:changed', {
-          'action': 'deleted',
-          'houseId': id,
-        });
-      }
-      return ok;
-    } catch (e) {
-      debugPrint('❌ deleteHouse error: $e');
-      return false;
     }
   }
 
@@ -1996,39 +2199,6 @@ class ApiService {
     } catch (e) {
       debugPrint('❌ updateAgreementStatus error: $e');
       return false;
-    }
-  }
-
-  /// Get Mapbox directions
-  static Future<Map<String, dynamic>?> getMapboxDirections(
-    double originLng,
-    double originLat,
-    double destinationLng,
-    double destinationLat,
-  ) async {
-    try {
-      // Note: You'll need to add your Mapbox access token to environment variables or configuration
-      const mapboxAccessToken = String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
-      if (mapboxAccessToken.isEmpty) {
-        debugPrint('Mapbox access token not configured');
-        return null;
-      }
-
-      final url = Uri.parse(
-        'https://api.mapbox.com/directions/v5/mapbox/driving/$originLng,$originLat;$destinationLng,$destinationLat'
-        '?overview=full&geometries=geojson&steps=true&access_token=$mapboxAccessToken',
-      );
-
-      final response = await http.get(url).timeout(timeout);
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else {
-        debugPrint('Mapbox directions error: ${response.statusCode}');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('❌ getMapboxDirections error: $e');
-      return null;
     }
   }
 }

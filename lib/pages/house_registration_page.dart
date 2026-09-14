@@ -15,12 +15,11 @@ import 'package:serik/model/house_data.dart';
 import 'package:serik/pages/login_page.dart';
 import 'package:serik/pages/landlord_verification_page.dart';
 import 'package:serik/services/api_services.dart';
-import 'package:serik/widgets/advanced_location_picker.dart';
-import 'package:serik/widgets/mapbox_location_picker.dart';
+import 'package:serik/widgets/google_maps_location_picker.dart';
 import '../providers/theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_compress/video_compress.dart';
-import 'package:serik/config/map_config.dart';
+
 
 class HouseRegistrationForm extends StatefulWidget {
   final Function(HouseData?)? onHouseAdded;
@@ -1659,41 +1658,18 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Switch between CSV picker and Mapbox picker based on config
-                    if (MapConfig.useMapbox)
-                      MapboxLocationPicker(
-                        onChanged: (location) {
-                          if (location != null) {
-                            setState(() {
-                              _locationDescriptionController.text = 
-                                '${location.latitude}, ${location.longitude}';
-                            });
-                          }
-                        },
-                      )
-                    else
-                      AdvancedLocationPicker(
-                        onLocationSelected:
-                            (
-                              fullAddress,
-                              region,
-                              district,
-                              division,
-                              ward,
-                              village,
-                              street,
-                            ) {
-                              setState(() {
-                                _selectedRegion = region;
-                                _selectedDistrict = district;
-                                _selectedDivision = division;
-                                _selectedWard = ward;
-                                _selectedVillage = village;
-                                _selectedStreet = street;
-                                _locationDescriptionController.text = fullAddress;
-                              });
-                            },
-                      ),
+                    // Use Google Maps location picker with administrative validation
+                    GoogleMapsLocationPicker(
+                      selectedRegion: _selectedRegion,
+                      selectedDistrict: _selectedDistrict,
+                      selectedWard: _selectedWard,
+                      onLocationSelected: (location) {
+                        setState(() {
+                          _locationDescriptionController.text = 
+                            '${location.latitude}, ${location.longitude}';
+                        });
+                      },
+                    ),
                     if (_selectedRegion.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -1995,7 +1971,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         final sizeInMB = sizeInBytes / (1024 * 1024);
         if (sizeInMB > 50) {
           _showFeedback(
-            'Video haipaswi kuzidi MB 50',
+            context.tr('Video haipaswi kuzidi MB 50', en: 'Video must not exceed 50 MB'),
             isError: true,
             icon: Icons.videocam_off_rounded,
           );
@@ -2030,7 +2006,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       if (!serviceEnabled) {
         if (!mounted) return;
         _showFeedback(
-          "Huduma ya eneo haijawezeshwa",
+          context.tr("Huduma ya eneo haijawezeshwa", en: "Location service not enabled"),
           isError: true,
           icon: Icons.location_off_rounded,
         );
@@ -2043,7 +2019,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
         if (permission == LocationPermission.denied) {
           if (!mounted) return;
           _showFeedback(
-            "Ruhusa ya eneo imekataliwa",
+            context.tr("Ruhusa ya eneo imekataliwa", en: "Location permission denied"),
             isError: true,
             icon: Icons.location_off_rounded,
           );
@@ -2054,7 +2030,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return;
         _showFeedback(
-          "Ruhusa ya eneo imekataliwa kabisa",
+          context.tr("Ruhusa ya eneo imekataliwa kabisa", en: "Location permission permanently denied"),
           isError: true,
           icon: Icons.location_off_rounded,
         );
@@ -2379,7 +2355,7 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
       debugPrint('❌ Error: $e');
       if (mounted) {
         _showFeedback(
-          'Hitilafu: $e',
+          context.tr('Hitilafu: $e', en: 'Error: $e'),
           isError: true,
           icon: Icons.error_outline_rounded,
         );
@@ -2500,9 +2476,34 @@ class _HouseRegistrationFormState extends State<HouseRegistrationForm> {
     List<String> videoUrls,
     List<String> videoThumbnails,
   ) {
+    // For new houses, set to pending_verification
+    // For rejected houses being resubmitted, also set to pending_verification
+    // For editing approved houses: require re-verification if significant changes
+    final isNew = widget.existingHouse == null;
+    final isRejected = (widget.existingHouse?.status?.toString().toLowerCase() ?? '') == 'imekataliwa';
+    final isApproved = (widget.existingHouse?.status?.toString().toLowerCase() ?? '') == 'inapatikana';
+    
+    // Detect significant changes that require re-verification
+    bool requiresReverification = false;
+    if (isApproved && widget.existingHouse != null) {
+      // Check if location changed
+      final locationChanged = _selectedLocation?.latitude != widget.existingHouse!.latitude ||
+                           _selectedLocation?.longitude != widget.existingHouse!.longitude;
+      // Check if price changed significantly (more than 10%)
+      final oldPrice = widget.existingHouse!.rentPrice as num? ?? 0;
+      final newPrice = double.parse(_rentPriceController.text);
+      final priceChanged = (newPrice - oldPrice).abs() / oldPrice > 0.1;
+      // Check if type changed
+      final typeChanged = _selectedHouseType != widget.existingHouse!.type;
+      // Check if new images/videos were added
+      final mediaChanged = _selectedImages.isNotEmpty || _selectedVideos.isNotEmpty;
+      
+      requiresReverification = locationChanged || priceChanged || typeChanged || mediaChanged;
+    }
+    
     return {
       "name": _houseNameController.text,
-      "status": "Inapatikana",
+      "status": (isNew || isRejected || requiresReverification) ? "pending_verification" : "Inapatikana",
       "type": _selectedHouseType,
       "bedrooms": _selectedBedrooms,
       "description": _descriptionController.text,

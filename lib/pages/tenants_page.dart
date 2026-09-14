@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:serik/l10n/app_localization.dart';
 import '../providers/theme_provider.dart';
 import '../model/tenant_model.dart';
-import '../widgets/custom_dialogs.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_components.dart';
 
 class TenantsPage extends StatelessWidget {
   final List<TenantData> tenants;
@@ -13,29 +13,20 @@ class TenantsPage extends StatelessWidget {
 
   const TenantsPage({super.key, required this.tenants, required this.onAddTenant});
 
-  static const _darkPrimary  = Color(0xFF46D39A);
-  static const _lightPrimary = Color(0xFF0F8B61);
-  static const _darkBg       = Color(0xFF0A0F0D);
-  static const _lightBg      = Color(0xFFF4F6F5);
-  static const _darkSurface  = Color(0xFF141A17);
-  static const _darkText     = Color(0xFFF0F5F2);
-  static const _lightText    = Color(0xFF111C17);
-  static const _darkSubtext  = Color(0xFF8A9490);
-  static const _lightSubtext = Color(0xFF5E6E68);
-
   @override
   Widget build(BuildContext context) {
-    final isDark     = Provider.of<ThemeProvider>(context).isDarkMode;
-    final locale     = Localizations.localeOf(context);
-    final isSw       = locale.languageCode == 'sw';
-    final primary    = isDark ? _darkPrimary  : _lightPrimary;
-    final bg         = isDark ? _darkBg       : _lightBg;
-    final surface    = isDark ? _darkSurface  : Colors.white;
-    final textCol    = isDark ? _darkText     : _lightText;
-    final subCol     = isDark ? _darkSubtext  : _lightSubtext;
-    final shadow     = isDark
-        ? Colors.black.withValues(alpha: 0.25)
-        : Colors.black.withValues(alpha: 0.06);
+    final l10n = AppLocalizations.of(context);
+    final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
+    final locale = Localizations.localeOf(context);
+    final isSw = locale.languageCode == 'sw';
+    final primary = isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary;
+    final bg = isDark ? AppTheme.darkBackground : Colors.grey[50]!;
+    final surface = isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
+    final textCol = isDark ? Colors.white : Colors.black87;
+    final subCol = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final shadow = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : Colors.black.withValues(alpha: 0.08);
 
     final activeTenants = tenants.where((t) => t.status == 'Active').length;
     final totalRent = tenants.fold(0.0, (s, t) => s + t.rentAmount);
@@ -43,167 +34,371 @@ class TenantsPage extends StatelessWidget {
     if (tenants.isEmpty) {
       return Scaffold(
         backgroundColor: bg,
-        body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 96, height: 96,
-            decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(Icons.people_outline, size: 48, color: primary)),
-          const SizedBox(height: 20),
-          Text(
-            context.tr('Hakuna Wapangaji', en: 'No Tenants Yet'),
-            style: GoogleFonts.poppins(
-                fontSize: 22, fontWeight: FontWeight.w700, color: textCol),
+        body: Center(
+          child: ModernEmptyState(
+            icon: Icons.people_outline,
+            title: l10n.tr('Hakuna Wapangaji', en: 'No Tenants Yet'),
+            subtitle: l10n.tr('Bonyeza + kuongeza mpangaji', en: 'Tap + to add a tenant'),
           ),
-          const SizedBox(height: 8),
-          Text(
-            context.tr('Bonyeza + kuongeza mpangaji', en: 'Tap + to add a tenant'),
-            style: GoogleFonts.poppins(fontSize: 14, color: subCol),
-          ),
-        ])),
+        ),
       );
     }
 
     return Scaffold(
       backgroundColor: bg,
-      body: Column(children: [
-        // Stats bar
-        Container(
-          margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primary, primary.withValues(alpha: 0.7)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(
-                color: primary.withValues(alpha: 0.3),
-                blurRadius: 12, offset: const Offset(0, 5))]),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            _statChip('${tenants.length}', isSw ? 'Jumla' : 'Total',
-                Icons.people_rounded, Colors.white),
-            _vDivider(),
-            _statChip('$activeTenants', isSw ? 'Wanaokaa' : 'Active',
-                Icons.check_circle_rounded, const Color(0xFF86EFAC)),
-            _vDivider(),
-            _statChip('TZS ${NumberFormat('#,###').format(totalRent)}',
-                isSw ? 'Kodi Jumla' : 'Total Rent',
-                Icons.monetization_on_rounded, const Color(0xFFFCD34D)),
-          ]),
-        ),
-        // Tenant list
-        Expanded(child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-          physics: const BouncingScrollPhysics(),
-          itemCount: tenants.length,
-          itemBuilder: (ctx, i) => _tenantCard(
-              tenants[i], i, isDark, surface, textCol, subCol, primary, shadow, ctx, isSw),
-        )),
-      ]),
+      body: Column(
+        children: [
+          // Stats bar
+          Container(
+            margin: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing16, AppTheme.spacing16, 0),
+            padding: const EdgeInsets.all(AppTheme.spacing18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [primary, primary.withValues(alpha: 0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+              boxShadow: [
+                BoxShadow(
+                  color: primary.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _statChip(
+                  '${tenants.length}',
+                  isSw ? 'Jumla' : 'Total',
+                  Icons.people_rounded,
+                  Colors.white,
+                ),
+                _vDivider(Colors.white.withValues(alpha: 0.3)),
+                _statChip(
+                  '$activeTenants',
+                  isSw ? 'Wanaokaa' : 'Active',
+                  Icons.check_circle_rounded,
+                  const Color(0xFF86EFAC),
+                ),
+                _vDivider(Colors.white.withValues(alpha: 0.3)),
+                _statChip(
+                  'TZS ${NumberFormat('#,###').format(totalRent)}',
+                  isSw ? 'Kodi Jumla' : 'Total Rent',
+                  Icons.monetization_on_rounded,
+                  const Color(0xFFFCD34D),
+                ),
+              ],
+            ),
+          ),
+          // Tenant list
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing16, AppTheme.spacing16, AppTheme.spacing80),
+              physics: const BouncingScrollPhysics(),
+              itemCount: tenants.length,
+              itemBuilder: (ctx, i) => _tenantCard(
+                tenants[i],
+                i,
+                isDark,
+                surface,
+                textCol,
+                subCol,
+                primary,
+                shadow,
+                ctx,
+                isSw,
+                l10n,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _vDivider() => Container(
-      width: 1, height: 40, color: Colors.white.withValues(alpha: 0.2));
+  Widget _statChip(String value, String label, IconData icon, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: AppTheme.spacing4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacing2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.white70,
+          ),
+        ),
+      ],
+    );
+  }
 
-  Widget _statChip(String value, String label, IconData icon, Color iconColor) =>
-      Column(mainAxisSize: MainAxisSize.min, children: [
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: iconColor, size: 15),
-          const SizedBox(width: 4),
-          Text(value, style: GoogleFonts.poppins(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-        ]),
-        const SizedBox(height: 2),
-        Text(label, style: GoogleFonts.poppins(
-            color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
-      ]);
+  Widget _vDivider([Color? color]) {
+    return Container(
+      width: 1,
+      height: 40,
+      color: color ?? Colors.grey.withValues(alpha: 0.3),
+    );
+  }
 
-  Widget _tenantCard(TenantData tenant, int i, bool isDark, Color surface,
-      Color textCol, Color subCol, Color primary, Color shadow,
-      BuildContext ctx, bool isSw) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 300 + i * 50),
+  Widget _tenantCard(
+    TenantData tenant,
+    int index,
+    bool isDark,
+    Color surface,
+    Color textCol,
+    Color subCol,
+    Color primary,
+    Color shadow,
+    BuildContext ctx,
+    bool isSw,
+    AppLocalizations l10n,
+  ) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 300 + (index * 50)),
       curve: Curves.easeOutCubic,
-      builder: (_, v, child) =>
-          Transform.translate(offset: Offset(24 * (1 - v), 0),
-              child: Opacity(opacity: v, child: child)),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: shadow, blurRadius: 10, offset: const Offset(0, 3))],
-          border: isDark ? Border.all(color: const Color(0xFF26312D), width: 0.5) : null),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => CustomDialogs.showTenantDetails(ctx, tenant.name,
-                tenant.phone, tenant.houseName, tenant.rentAmount,
-                tenant.startDate, tenant.endDate, tenant.status),
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(children: [
-                // Avatar
-                Container(
-                  width: 52, height: 52,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [primary, primary.withValues(alpha: 0.5)],
-                      begin: Alignment.topLeft, end: Alignment.bottomRight),
-                    borderRadius: BorderRadius.circular(16)),
-                  child: Center(child: Text(
+      margin: const EdgeInsets.only(bottom: AppTheme.spacing12),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        boxShadow: [
+          BoxShadow(
+            color: shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        onTap: () {
+          // Show tenant details dialog
+          _showTenantDetails(ctx, tenant, isDark, surface, textCol, subCol, primary, isSw, l10n);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spacing16),
+          child: Row(
+            children: [
+              // Avatar
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primary, primary.withValues(alpha: 0.7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                ),
+                child: Center(
+                  child: Text(
                     tenant.name.isNotEmpty ? tenant.name[0].toUpperCase() : '?',
-                    style: GoogleFonts.poppins(
-                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)))),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(tenant.name, style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w700, fontSize: 15, color: textCol)),
-                  const SizedBox(height: 2),
-                  Text(tenant.houseName, style: GoogleFonts.poppins(
-                      fontSize: 12, color: subCol)),
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8)),
-                      child: Text(
-                        'TZS ${NumberFormat('#,###').format(tenant.rentAmount)}/mo',
-                        style: GoogleFonts.poppins(
-                            fontSize: 11, color: primary, fontWeight: FontWeight.w700))),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: tenant.status == 'Active'
-                            ? const Color(0xFF22C55E).withValues(alpha: 0.12)
-                            : Colors.grey.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8)),
-                      child: Text(
-                        tenant.status == 'Active'
-                            ? (isSw ? 'Anakaa' : 'Active') : tenant.status,
-                        style: GoogleFonts.poppins(
-                          fontSize: 10, fontWeight: FontWeight.w700,
-                          color: tenant.status == 'Active'
-                              ? const Color(0xFF22C55E) : Colors.grey))),
-                  ]),
-                ])),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Icon(Icons.chevron_right_rounded, color: primary, size: 20)),
-              ]),
-            ),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacing12),
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tenant.name,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: textCol,
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacing4),
+                    Row(
+                      children: [
+                        Icon(Icons.home_outlined, size: 14, color: subCol),
+                        const SizedBox(width: AppTheme.spacing4),
+                        Expanded(
+                          child: Text(
+                            tenant.houseName,
+                            style: TextStyle(fontSize: 12, color: subCol),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppTheme.spacing4),
+                    Row(
+                      children: [
+                        Icon(Icons.phone_outlined, size: 14, color: subCol),
+                        const SizedBox(width: AppTheme.spacing4),
+                        Text(
+                          tenant.phone,
+                          style: TextStyle(fontSize: 12, color: subCol),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Status & Rent
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacing8,
+                      vertical: AppTheme.spacing4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tenant.status == 'Active'
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                    ),
+                    child: Text(
+                      tenant.status,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: tenant.status == 'Active' ? Colors.green : Colors.orange,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacing8),
+                  Text(
+                    'TZS ${NumberFormat('#,###').format(tenant.rentAmount)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: primary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showTenantDetails(
+    BuildContext ctx,
+    TenantData tenant,
+    bool isDark,
+    Color surface,
+    Color textCol,
+    Color subCol,
+    Color primary,
+    bool isSw,
+    AppLocalizations l10n,
+  ) {
+    showDialog(
+      context: ctx,
+      builder: (context) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLarge)),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primary, primary.withValues(alpha: 0.7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+              ),
+              child: Center(
+                child: Text(
+                  tenant.name.isNotEmpty ? tenant.name[0].toUpperCase() : '?',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppTheme.spacing12),
+            Expanded(
+              child: Text(
+                tenant.name,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textCol,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _detailRow(Icons.home_outlined, isSw ? 'Nyumba' : 'House', tenant.houseName, subCol, textCol),
+              const SizedBox(height: AppTheme.spacing12),
+              _detailRow(Icons.phone_outlined, isSw ? 'Simu' : 'Phone', tenant.phone, subCol, textCol),
+              const SizedBox(height: AppTheme.spacing12),
+              if (tenant.startDate != null)
+                _detailRow(Icons.calendar_today_outlined, isSw ? 'Tarehe ya Kuanza' : 'Start Date', 
+                    DateFormat('dd MMM yyyy').format(tenant.startDate!), subCol, textCol),
+              if (tenant.endDate != null)
+                _detailRow(Icons.event_outlined, isSw ? 'Tarehe ya Mwisho' : 'End Date', 
+                    DateFormat('dd MMM yyyy').format(tenant.endDate!), subCol, textCol),
+              const SizedBox(height: AppTheme.spacing12),
+              _detailRow(Icons.monetization_on_outlined, isSw ? 'Kodi' : 'Rent', 
+                  'TZS ${NumberFormat('#,###').format(tenant.rentAmount)}', subCol, textCol),
+              const SizedBox(height: AppTheme.spacing12),
+              _detailRow(Icons.info_outline, isSw ? 'Hali' : 'Status', tenant.status, subCol, textCol),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.tr('Funga', en: 'Close')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value, Color subCol, Color textCol) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: subCol),
+        const SizedBox(width: AppTheme.spacing12),
+        Text(
+          '$label: ',
+          style: TextStyle(fontWeight: FontWeight.w600, color: subCol),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(color: textCol),
+          ),
+        ),
+      ],
     );
   }
 }

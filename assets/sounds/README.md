@@ -35,7 +35,7 @@ Complete sound system for SERK Rental Platform - High-quality audio experience.
 **Implementation:**
 - Uses audioplayers package for foreground sound playback
 - NotificationService manages notification-specific sounds
-- Mapbox navigation manages navigation-specific sounds
+- Google Maps navigation manages navigation-specific sounds
 - Android uses raw resources for system notification sounds
 - Automatic error handling if sound files missing
 

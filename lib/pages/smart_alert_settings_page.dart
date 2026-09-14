@@ -92,8 +92,8 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
       SnackBar(
         content: Text(
           ok
-              ? 'Smart alerts zimehifadhiwa.'
-              : 'Imeshindikana kuhifadhi smart alerts.',
+              ? context.tr('Smart alerts zimehifadhiwa.', en: 'Smart alerts saved successfully.')
+              : context.tr('Imeshindikana kuhifadhi smart alerts.', en: 'Failed to save smart alerts.'),
         ),
       ),
     );
@@ -147,9 +147,11 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
           ? _LoginRequiredState(colors: colors)
           : _token == null
           ? _MissingTokenState(colors: colors)
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              children: [
+          : RefreshIndicator(
+              onRefresh: _loadPreferences,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                children: [
                 SwitchListTile(
                   value: _enabled,
                   onChanged: (value) => setState(() => _enabled = value),
@@ -245,7 +247,8 @@ class _SmartAlertSettingsPageState extends State<SmartAlertSettingsPage> {
                   ),
                 ),
               ],
-            ),
+          ),
+        ),
     );
   }
 }
@@ -351,8 +354,11 @@ class _MissingTokenState extends StatelessWidget {
               color: colors.onSurfaceVariant,
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Token ya notification haijapatikana. Hakikisha umeipa app ruhusa ya notifications kisha jaribu tena.',
+            Text(
+              context.tr(
+                'Token ya notification haijapatikana. Hakikisha umeipa app ruhusa ya notifications kisha jaribu tena.',
+                en: 'Notification token not available. Please ensure the app has notification permissions and try again.',
+              ),
               textAlign: TextAlign.center,
             ),
           ],

@@ -3,8 +3,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:serik/pages/admin_home_screen.dart';
 import 'package:serik/pages/custom_map_page.dart';
 import 'package:serik/pages/admin_map_page.dart';
+import 'package:serik/pages/rental_home_page.dart';
 import 'package:serik/providers/auth_provider.dart';
 
 class RoleBasedHomePage extends StatelessWidget {
@@ -15,8 +17,18 @@ class RoleBasedHomePage extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
     final userRole = authProvider.userRole;
 
-    // 🔥 LANDLORD - Anaona Admin Map (nyumba zake)
-    if (userRole == 'landlord' || userRole == 'admin') {
+    // 🔥 ADMIN - Anaona admin dashboard kamili
+    if (userRole == 'admin') {
+      return const AdminHomeScreen();
+    }
+
+    // 🔥 LANDLORD - Anaona landlord dashboard
+    if (userRole == 'landlord') {
+      return const RentalHomePage();
+    }
+
+    // 🔥 BACKWARD COMPATIBILITY - default map view for power users
+    if (userRole == 'landlord_map') {
       return const AdminMapPage();
     }
 

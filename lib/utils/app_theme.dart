@@ -27,7 +27,6 @@ class AppTheme {
     colorScheme: const ColorScheme.dark(
       primary: darkPrimary,
       surface: darkSurface,
-      background: darkBg,
       error: error,
     ),
     scaffoldBackgroundColor: darkBg,
@@ -102,7 +101,6 @@ class AppTheme {
     colorScheme: const ColorScheme.light(
       primary: lightPrimary,
       surface: Colors.white,
-      background: lightBg,
       error: error,
     ),
     scaffoldBackgroundColor: lightBg,

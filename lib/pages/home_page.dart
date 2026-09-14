@@ -19,6 +19,7 @@ import 'package:serik/providers/theme_provider.dart';
 import 'package:serik/screen/rental_detail_screen.dart';
 import 'package:serik/services/api_services.dart';
 import 'package:serik/services/realtime_service.dart';
+import 'package:serik/widgets/property_banner_carousel.dart';
 import 'package:serik/widgets/saved_house_button.dart';
 
 class HomePage extends StatefulWidget {
@@ -649,8 +650,10 @@ class _HomePageState extends State<HomePage>
   ) {
     final authProvider = Provider.of<AuthProvider>(context);
 
-    return CustomScrollView(
-      slivers: [
+    return RefreshIndicator(
+      onRefresh: _loadHouses,
+      child: CustomScrollView(
+        slivers: [
         // Modern AppBar
         SliverAppBar(
           floating: true,
@@ -965,6 +968,11 @@ class _HomePageState extends State<HomePage>
               ],
             ),
           ),
+        ),
+
+        // Property Banner Carousel (below search button)
+        const SliverToBoxAdapter(
+          child: PropertyBannerCarousel(),
         ),
 
         // Featured Verified Rentals Section
@@ -1282,7 +1290,8 @@ class _HomePageState extends State<HomePage>
             ),
           ),
       ],
-    );
+    ),
+  );
   }
 
   Widget _buildCategoryPill(
@@ -1701,31 +1710,34 @@ class _HomePageState extends State<HomePage>
           ),
         ],
       ),
-      body: _filteredSpots.isEmpty
-          ? Center(
-              child: Text(
-                context.tr(
-                  'Hakuna nyumba zilizopatikana.',
-                  en: 'No houses found.',
+      body: RefreshIndicator(
+        onRefresh: _loadHouses,
+        child: _filteredSpots.isEmpty
+            ? Center(
+                child: Text(
+                  context.tr(
+                    'Hakuna nyumba zilizopatikana.',
+                    en: 'No houses found.',
+                  ),
+                  style: TextStyle(color: subtextColor),
                 ),
-                style: TextStyle(color: subtextColor),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredSpots.length,
+                itemBuilder: (context, index) {
+                  final spot = _filteredSpots[index];
+                  return _buildVerticalHouseCard(
+                    spot,
+                    isDark,
+                    primaryColor,
+                    cardBg,
+                    textColor,
+                    subtextColor,
+                  );
+                },
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _filteredSpots.length,
-              itemBuilder: (context, index) {
-                final spot = _filteredSpots[index];
-                return _buildVerticalHouseCard(
-                  spot,
-                  isDark,
-                  primaryColor,
-                  cardBg,
-                  textColor,
-                  subtextColor,
-                );
-              },
-            ),
+      ),
     );
   }
 
